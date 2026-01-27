@@ -1,0 +1,10 @@
+[project]
+name = "pd2-conducia"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.4.1",
+    "pandas>=3.0.0",
+]
