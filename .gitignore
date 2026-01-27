@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Ignorar carpetas de datos
+datos/
+datos_clean/
+*.parquet
+*.csv
