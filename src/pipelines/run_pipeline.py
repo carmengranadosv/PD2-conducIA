@@ -3,6 +3,7 @@ from pathlib import Path
 
 from src.config import RAW_DIR, PROCESSED_DIR, DATA_DIR
 from src.io.download_tlc import download, month_range
+from src.io.download_tlc import ensure_taxi_zone_lookup
 from src.processing.clean_tlc import clean_file
 from src.processing.enrich_tlc import enrich_with_zones
 
@@ -19,7 +20,10 @@ def main():
 
     services = [s.lower() for s in args.services]
 
-    LOOKUP_PATH = DATA_DIR / "taxi_zone_lookup.csv"
+    LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
+    if not args.skip_enrich:
+        print(ensure_taxi_zone_lookup(LOOKUP_PATH, overwrite=args.overwrite))
+
 
     # 1) Descargar
     for service in services:

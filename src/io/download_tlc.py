@@ -41,3 +41,19 @@ def download(service: str, start: str, end: str, raw_dir: Path):
 
         print(f"DESCARGANDO {fname}")
         urllib.request.urlretrieve(url, out)
+
+
+# Tal vez debería hacerse en otro archivo : download_lookup?
+LOOKUP_URL = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+
+def ensure_taxi_zone_lookup(lookup_path: Path, overwrite: bool = False) -> str:
+    """
+    Descarga taxi_zone_lookup.csv si no existe (o si overwrite=True).
+    """
+    lookup_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if lookup_path.exists() and not overwrite:
+        return f"SKIP lookup ({lookup_path.name})"
+
+    urllib.request.urlretrieve(LOOKUP_URL, lookup_path)
+    return f"OK   lookup ({lookup_path.name})"
