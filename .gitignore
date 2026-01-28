@@ -211,3 +211,10 @@ datos/
 datos_clean/
 *.parquet
 *.csv
+
+data/raw/
+data/processed/
+
+# (por seguridad, ignora cualquier parquet/csv pesado)
+*.parquet
+*.csv
