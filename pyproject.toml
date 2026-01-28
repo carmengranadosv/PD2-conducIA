@@ -11,3 +11,8 @@ dependencies = [
     "pyarrow>=23.0.0",
     "seaborn>=0.13.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+]
