@@ -2,6 +2,8 @@
 
 Estructura: 
 
+```
+
 PD2-conducIA/
 │
 ├── README.md
@@ -43,3 +45,5 @@ PD2-conducIA/
 └── docs/
     ├── datos.md
     └── estudio_mercado.md
+    
+```
