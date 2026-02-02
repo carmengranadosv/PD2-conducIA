@@ -1,0 +1,169 @@
+/* General */
+body {
+    font-family: 'Open Sans', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #ffffff;
+    color: #2c3e50;
+    line-height: 1.8;
+}
+
+/* Margen lateral de la página (El "aire" que pedías) */
+.main-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+/* Cabecera superior negra */
+.top-bar {
+    background: #1a1a1a;
+    color: #777;
+    text-align: right;
+    padding: 10px 40px;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+}
+
+/* Pestañas de entregas */
+.nav-entregas {
+    text-align: center;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.nav-entregas a {
+    margin: 0 15px;
+    text-decoration: none;
+    color: #999;
+    font-weight: 600;
+}
+
+.nav-entregas a.active {
+    color: #e74c3c; /* Color rojo para la entrega activa */
+    border-bottom: 2px solid #e74c3c;
+}
+
+/* SECCIÓN TITULAR CENTRADA */
+.hero-section {
+    text-align: center;
+    padding: 60px 0;
+}
+
+.entrega-numero {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 4px;
+    color: #555;
+    margin-bottom: 10px;
+}
+
+.proyecto-titulo {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 4rem;
+    font-weight: 700;
+    margin: 0;
+    color: #000;
+}
+
+.linea-roja {
+    width: 100px;
+    height: 5px;
+    background-color: #e74c3c;
+    margin: 10px auto 30px;
+}
+
+.autores-container {
+    font-size: 0.95rem;
+    color: #666;
+}
+
+/* ÍNDICE DEBAJO DEL TÍTULO */
+.indice-centrado {
+    background: #f9f9f9;
+    padding: 25px;
+    border-radius: 12px;
+    margin: 40px 0;
+    text-align: center;
+}
+
+.indice-centrado ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+}
+
+.indice-centrado a {
+    text-decoration: none;
+    color: #2980b9;
+    font-weight: 600;
+}
+
+/* CONTENIDO */
+h2 {
+    border-left: 5px solid #e74c3c;
+    padding-left: 15px;
+    margin-top: 50px;
+    color: #1a1a1a;
+}
+
+.contenedor-grafico {
+    background: #fdfdfd;
+    border: 1px solid #eee;
+    padding: 20px;
+    margin: 30px 0;
+    text-align: center;
+}
+
+.contenedor-grafico img {
+    max-width: 100%;
+    border-radius: 4px;
+}
+
+.caption {
+    font-size: 0.85rem;
+    color: #888;
+    margin-top: 10px;
+}
+
+/* Para centrar la portada verticalmente */
+.main-centrado {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 70vh;
+    text-align: center;
+}
+
+.resumen-proyecto {
+    max-width: 700px;
+    margin: 20px auto 40px;
+    font-size: 1.1rem;
+    color: #555;
+    line-height: 1.8;
+}
+
+/* Espaciado para el índice */
+.indice-centrado {
+    background: #fdfdfd;
+    border: 1px solid #eee;
+    padding: 20px;
+    margin-bottom: 50px;
+}
+
+.indice-centrado ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+}
+
+.indice-centrado a {
+    text-decoration: none;
+    color: #e74c3c;
+    font-weight: 600;
+}
