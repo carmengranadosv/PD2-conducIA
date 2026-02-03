@@ -25,6 +25,9 @@
             <p class="entrega-numero">PRIMERA ENTREGA</p>
             <h1 class="proyecto-titulo">ConducIA</h1>
             <div class="linea-roja"></div>
+            <p class="resumen-proyecto" style="font-size: 1.1rem; color: #555;">
+                Inteligencia de Datos para la Optimización de Costes en el Transporte Urbano de NYC.
+            </p>
         </header>
 
         <nav class="indice-centrado">
@@ -41,34 +44,207 @@
 
         <main class="cuerpo-memoria">
             <section id="ejercicio1">
-                <h2>Ejercicio 1: Selección de fuentes y visualización</h2>
-                <p>Contenido del ejercicio 1 aquí...</p>
-                <div class="contenedor-grafico">
-                    <img src="tu-grafico-1.png" alt="Análisis de datos">
-                    <p class="caption">Figura 1.1: Visualización de datos relevantes.</p>
+                <h2>1. Selección de fuentes y visualización</h2>
+                <p>Para transformar los datos brutos de la <strong>NYC Taxi & Limousine Commission (TLC)</strong>, hemos diseñado una arquitectura ETL automatizada.</p>
+                
+                <h3>1.1 Selección de Fuentes Relevantes</h3>
+                <div class="caja-tecnica" style="background: #f9f9f9; padding: 15px; border-left: 5px solid #2c3e50; margin-bottom: 20px;">
+                    <ul>
+                        <li><strong>Yellow Taxi Trip Records:</strong> Representa el mercado tradicional (tarifas fijas/reguladas). Fundamental para entender la oferta base.</li>
+                        <li><strong>High Volume FHV (Uber/Lyft):</strong> Representa el mercado de precios dinámicos (Surge Pricing). Clave para nuestra propuesta de optimización de costes.</li>
+                        <li><strong>Taxi Zone Lookup:</strong> Dato geoespacial que nos permite segmentar el análisis por barrios y distritos comerciales.</li>
+                    </ul>
                 </div>
+                <h3>1.2 Visualización para la Propuesta de Negocio</h3>
+                <p>El procesamiento de los datos (ETL) nos ha permitido generar evidencias visuales que justifican la necesidad de <strong>ConducIA</strong>:</p>
+
+                <div>
+                    <img src="heatmap.png" alt="Mapa de Calor de rutas frecuentes" style="width: 100%; border: 1px solid #ddd;">
+                    <p class="caption">
+                        <strong>Figura 1.1: Concentración de la Demanda.</strong> 
+                        El mapa de calor demuestra que el 80% de los viajes se concentran en rutas específicas (Aeropuertos <-> Manhattan). 
+                        <br><em>Argumento:</em> Nuestra herramienta se enfocará solo en estos "corredores de oro" donde la competencia y el ahorro potencial son máximos.
+                    </p>
+                </div>
+                <div class="contenedor-grafico">
+                    <img src="anomalias.png" alt="Gráfico de anomalías temporales" style="width: 100%; border: 1px solid #ddd;">
+                    <p class="caption">
+                        <strong>Figura 1.2: Volatilidad Temporal.</strong> 
+                        Hemos detectado picos anómalos (puntos rojos) asociados a eventos y clima.
+                        <br><em>Argumento:</em> La existencia de estas anomalías valida nuestro modelo: predecir estos picos permite a las empresas cambiar de VTC a Taxi tradicional antes de que suban los precios.
+                    </p>
+                </div> 
             </section>
 
             <section id="ejercicio2">
-                <h2>Ejercicio 2: Estudio de mercado</h2>
-                <h3>(a) Clientes potenciales</h3>
-                <p>Análisis de patrones de uso...</p>
-                <h3>(b) Modelos de monetización</h3>
-                <p>Evaluación frente a la competencia...</p>
+                <h2>2. Estudio de Mercado</h2>
+                <p>Basándonos en los datos geoespaciales del <em>Taxi Zone Lookup</em>, hemos segmentado el mercado de Nueva York en dos perfiles clave para nuestra estrategia B2B.</p>
+
+                <h3>(a) Análisis de Clientes y Patrones</h3>
+    
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        
+                    <div class="perfil-cliente" style="background: white; border: 1px solid #ddd; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <h4 style="color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;">Perfil A: "Corporate Manhattan"</h4>
+                        <ul style="margin-top: 15px;">
+                            <li><strong>Quién:</strong> Bancos de inversión, consultoras y bufetes en Financial District.</li>
+                            <li><strong>Necesidad:</strong> Puntualidad absoluta para reuniones y traslados al aeropuerto (JFK).</li>
+                            <li><strong>Patrón de Datos:</strong> Alta demanda Lunes-Viernes, 08:00h - 18:00h. Inelásticos al precio.</li>
+                        </ul>
+                    </div>
+
+                    <div class="perfil-cliente" style="background: white; border: 1px solid #ddd; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <h4 style="color: #2c3e50; border-bottom: 2px solid #f1c40f; padding-bottom: 10px;">Perfil B: "Logística Urbana"</h4>
+                        <ul style="margin-top: 15px;">
+                            <li><strong>Quién:</strong> Empresas de reparto y flotas de VTC pequeñas.</li>
+                            <li><strong>Necesidad:</strong> Minimizar costes operativos (fuel y tiempo).</li>
+                            <li><strong>Patrón de Datos:</strong> Rutas largas entre distritos (Queens <-> Brooklyn). Muy sensibles al <em>Surge Pricing</em>.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3 style="margin-top: 30px;">(b) Modelo de Negocio vs. Competencia</h3>
+                <p>A diferencia de Uber o Lyft, que monetizan por viaje (B2C), <strong>ConducIA</strong> es una herramienta de inteligencia (SaaS B2B).</p>
+
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px; background: white;">
+                    <thead>
+                        <tr style="background: #333; color: white;">
+                            <th style="padding: 12px; text-align: left;">Característica</th>
+                            <th style="padding: 12px; text-align: left;">Competencia (Uber/Lyft)</th>
+                            <th style="padding: 12px; text-align: left; background: #e74c3c;">Propuesta ConducIA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Modelo de Ingresos</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Comisión por viaje (20-30%)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Suscripción Mensual (SaaS)</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Cliente Objetivo</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Pasajero final (B2C)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Gestores de Flotas (B2B)</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Valor Añadido</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Conectividad inmediata</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Predicción de precios (Ahorro)</td>
+                        </tr>
+                    </tbody>
+                </table>
             </section>
 
             <section id="ejercicio3">
-                <h2>Ejercicio 3: Planificación</h2>
-                <p>Cronograma para finalizar en abril...</p>
-            </section>
+                <h2>3. Planificación del Proyecto (Roadmap)</h2>
+                <p>Para garantizar la entrega del MVP (Producto Mínimo Viable) a finales de abril, el equipo sigue la metodología ágil con los siguientes hitos:</p>
 
+                <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        
+                    <thead>
+                        <tr style="background: #2c3e50; color: white; text-align: left;">
+                            <th style="padding: 15px;">Fase / Mes</th>
+                            <th style="padding: 15px;">Entregables Clave</th>
+                            <th style="padding: 15px;">Estado</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+            
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 15px; font-weight: bold;">Febrero</td>
+                            <td style="padding: 15px;">
+                                1. Ingeniería de Datos (ETL).<br>
+                                2. Limpieza y Calidad del Dato.<br>
+                                3. Análisis Exploratorio (EDA).
+                            </td>
+                            <td style="padding: 15px;">
+                                <span style="background: #d4edda; color: #155724; padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: bold;">
+                                    Completado
+                                </span>
+                            </td>
+                        </tr>
+
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 15px; font-weight: bold;">Marzo</td>
+                            <td style="padding: 15px;">
+                                1. Desarrollo del Modelo Predictivo (ML).<br>
+                                2. Comparativa de precios Taxi vs VTC.
+                            </td>
+                            <td style="padding: 15px;">
+                                <span style="background: #fff3cd; color: #856404; padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: bold;">
+                                    En Proceso
+                                </span>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding: 15px; font-weight: bold;">Abril</td>
+                            <td style="padding: 15px;">
+                                1. Dashboard Interactivo para cliente.<br>
+                                2. Memoria final y Defensa.
+                            </td>
+                            <td style="padding: 15px;">
+                                <span style="background: #e2e3e5; color: #383d41; padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: bold;">
+                                    Pendiente
+                                </span>
+                            </td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </section>
             <section id="organizacion">
-                <h2>4. Organización y Repositorio</h2>
-                <div class="caja-github">
-                    <p>Enlace al repositorio oficial:</p>
-                    <a href="https://github.com/carmengranadosv/PD2-conducIA" target="_blank" class="boton-github">Ver GitHub</a>
+                <h2>4. Organización del Equipo</h2>
+                <p>Para la coordinación del proyecto, el equipo ha seguido una metodología ágil con reuniones diarias (dailies) y control de versiones mediante <strong>GitFlow</strong>.</p>
+
+                <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <thead>
+                        <tr style="background: #2c3e50; color: white; text-align: left;">
+                            <th style="padding: 15px;">Miembro del Equipo</th>
+                            <th style="padding: 15px;">Rol Principal</th>
+                            <th style="padding: 15px; text-align: center;">% Carga</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 15px; font-weight: bold;">Lucía Giménez García</td>
+                            <td style="padding: 15px;">Ingeniería de Datos (ETL) y Limpieza</td>
+                            <td style="padding: 15px; text-align: center;">100%</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 15px; font-weight: bold;">Nayara González Rubiales</td>
+                            <td style="padding: 15px;">Análisis Exploratorio (EDA) y Gráficos</td>
+                            <td style="padding: 15px; text-align: center;">100%</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 15px; font-weight: bold;">Mª del Carmen Granados Villa</td>
+                            <td style="padding: 15px;">Documentación, HTML y Git Master</td>
+                            <td style="padding: 15px; text-align: center;">100%</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 15px; font-weight: bold;">Carla López Priego</td>
+                            <td style="padding: 15px;">Estrategia de Negocio y Mercado</td>
+                            <td style="padding: 15px; text-align: center;">100%</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 15px; font-weight: bold;">Marcos Poza Calvo</td>
+                            <td style="padding: 15px;">Arquitectura y Estudio de Competencia</td>
+                            <td style="padding: 15px; text-align: center;">100%</td>
+                        </tr>
+                        </tbody>
+                </table>
+
+                <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
+                    <p style="margin-bottom: 15px;">El código completo del proyecto está disponible en nuestro repositorio oficial:</p>
+        
+                    <a href="https://github.com/carmengranadosv/PD2-conducIA" target="_blank" style="background: #24292e; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-flex; align-items: center; gap: 10px;">
+                        <svg height="20" width="20" viewBox="0 0 16 16" fill="white">
+                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                        </svg>
+                        Ver Código en GitHub
+                    </a>
                 </div>
-                </section>
+            </section>
         </main>
     </div>
 
