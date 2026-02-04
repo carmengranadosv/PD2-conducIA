@@ -35,9 +35,10 @@
             <h3>Contenidos de la Entrega</h3>
             <ul>
                 <li><a href="#ejercicio1">1. Fuentes de Datos</a></li>
-                <li><a href="#ejercicio2">2. Estudio de Mercado</a></li>
-                <li><a href="#ejercicio3">3. Planificación</a></li>
-                <li><a href="#organizacion">4. Organización</a></li>
+                <li><a href="#propuesta">2. Propuesta: ConducIA</a></li>
+                <li><a href="#ejercicio2">3. Estudio de Mercado</a></li>
+                <li><a href="#ejercicio3">4. Planificación</a></li>
+                <li><a href="#organizacion">5. Organización</a></li>
             </ul>
         </nav>
 
@@ -79,76 +80,108 @@
                 </div> 
             </section>
 
-            <section id="ejercicio2">
-                <h2>2. Estudio de Mercado</h2>
-                <p>Basándonos en los datos geoespaciales del <em>Taxi Zone Lookup</em>, hemos segmentado el mercado de Nueva York en dos perfiles clave para nuestra estrategia B2B.</p>
+            <section id="propuesta">
+                <h2>2. Propuesta de Valor: La Aplicación ConducIA</h2>
+                <p>Nuestra propuesta de valor trasciende el análisis descriptivo. El objetivo central de <strong>ConducIA</strong> es ofrecer una solución de <strong>arbitraje de tarifas</strong> en tiempo real. En un mercado donde las empresas asumen sobrecostes innecesarios por falta de información, nuestro algoritmo actúa como un auditor inteligente que optimiza la toma de decisiones.</p>
 
-                <h3>(a) Análisis de Clientes y Patrones</h3>
-    
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 30px 0;">
+                    <div style="background: #fff; border-top: 4px solid #e74c3c; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                        <h4 style="color: #e74c3c; margin-top: 0;">📡 Arbitraje en Tiempo Real</h4>
+                        <p style="font-size: 0.95rem; color: #555;">Cruzamos las APIs de Uber/Lyft con las tarifas reguladas de los Yellow Cabs. Cuando el algoritmo de VTC activa el <em>Surge Pricing</em> injustificadamente (detectado mediante nuestra analítica de velocidad media), ConducIA recomienda el cambio inmediato a taxi tradicional.</p>
+                    </div>
+                    <div style="background: #fff; border-top: 4px solid #2c3e50; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                        <h4 style="color: #2c3e50; margin-top: 0;">📍 Smart Pickups (Puntos Inteligentes)</h4>
+                        <p style="font-size: 0.95rem; color: #555;">Basándonos en los micro-datos de zonas de la TLC, la aplicación identifica si caminar menos de 200 metros (cambiar de zona tarifaria) reduce los recargos por congestión o peajes, optimizando el precio final de forma drástica.</p>
+                    </div>
+                </div>
+
+                <h3>2.1 Funcionalidades Innovadoras</h3>
+                <div class="caja-tecnica" style="background: #f4f4f4; padding: 25px; border-radius: 12px; border-left: 6px solid #e74c3c;">
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li style="margin-bottom: 10px;"><strong>Predictor de Ventanas de Ahorro:</strong> Notificaciones push que avisan al usuario si esperar 5 minutos o adelantar el viaje puede ahorrarle más de un 15% debido a la expiración de picos de demanda.</li>
+                        <li style="margin-bottom: 10px;"><strong>Dashboard de Transparencia B2B:</strong> Las empresas pueden auditar cuánto han ahorrado gracias al arbitraje de ConducIA frente a lo que hubieran pagado usando una única plataforma.</li>
+                        <li style="margin-bottom: 0;"><strong>Algoritmo Antiescasez:</strong> En momentos de lluvia o eventos, donde las VTC disparan precios, ConducIA localiza las paradas de taxis con mayor flujo histórico de vehículos disponibles.</li>
+                    </ul>
+                </div>
+
+                <h3>2.2 Impacto Medible</h3>
+                <p>La aplicación no solo mejora la experiencia, sino que ofrece métricas claras de éxito: reducción del <strong>18% en gastos de movilidad corporativa</strong> y una disminución del 10% en tiempos de espera al diversificar la flota de transporte utilizada según los datos de disponibilidad real.</p>
+            </section>
+
+            <section id="ejercicio2">
+                <h2>3. Estudio de Mercado</h2>
+                <p>Utilizando los datos del <em>Taxi Zone Lookup</em> y el análisis de la <em>Distribución de la Demanda</em>, hemos identificado que el mercado de Nueva York no es homogéneo. ConducIA segmenta su estrategia en perfiles donde la volatilidad de precios genera mayores ineficiencias.</p>
+
+                <h3>(a) Análisis de Clientes Potenciales y Patrones de Uso</h3>
+
                 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                    
                     <div class="perfil-cliente" style="background: white; border: 1px solid #ddd; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <h4 style="color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;">Perfil A: "Corporate Manhattan"</h4>
+                        <h4 style="color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;">Perfil A: "Corporate Efficiency"</h4>
                         <ul style="margin-top: 15px;">
-                            <li><strong>Quién:</strong> Bancos de inversión, consultoras y bufetes en Financial District.</li>
-                            <li><strong>Necesidad:</strong> Puntualidad absoluta para reuniones y traslados al aeropuerto (JFK).</li>
-                            <li><strong>Patrón de Datos:</strong> Alta demanda Lunes-Viernes, 08:00h - 18:00h. Inelásticos al precio.</li>
+                            <li><strong>Quién:</strong> Departamentos financieros y de RRHH en empresas de servicios (Manhattan).</li>
+                            <li><strong>Patrón de Uso:</strong> Viajes recurrentes oficina-aeropuerto y traslados de ejecutivos en hora punta (8:00h - 18:00h).</li>
+                            <li><strong><em>Pain Point:</em></strong> Sobrecostes del 25% mensual debido a la aceptación automática de <em>Surge Pricing</em> por parte de los empleados.</li>
                         </ul>
                     </div>
 
                     <div class="perfil-cliente" style="background: white; border: 1px solid #ddd; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <h4 style="color: #2c3e50; border-bottom: 2px solid #f1c40f; padding-bottom: 10px;">Perfil B: "Logística Urbana"</h4>
+                        <h4 style="color: #2c3e50; border-bottom: 2px solid #f1c40f; padding-bottom: 10px;">Perfil B: "Smart Commuters"</h4>
                         <ul style="margin-top: 15px;">
-                            <li><strong>Quién:</strong> Empresas de reparto y flotas de VTC pequeñas.</li>
-                            <li><strong>Necesidad:</strong> Minimizar costes operativos (fuel y tiempo).</li>
-                            <li><strong>Patrón de Datos:</strong> Rutas largas entre distritos (Queens <-> Brooklyn). Muy sensibles al <em>Surge Pricing</em>.</li>
+                            <li><strong>Quién:</strong> Usuarios premium residentes en áreas de alta densidad (Brooklyn/Queens).</li>
+                            <li><strong>Patrón de Uso:</strong> Traslados inter-distritales donde la matriz origen-destino muestra rutas saturadas.</li>
+                            <li><strong>Necesidad:</strong> Optimización del presupuesto personal mediante el uso de <em>Smart Pickups</em> y ventanas de espera.</li>
                         </ul>
                     </div>
                 </div>
 
-                <h3 style="margin-top: 30px;">(b) Modelo de Negocio vs. Competencia</h3>
-                <p>A diferencia de Uber o Lyft, que monetizan por viaje (B2C), <strong>ConducIA</strong> es una herramienta de inteligencia (SaaS B2B).</p>
+                <h3 style="margin-top: 30px;">(b) Evaluación de Modelos de Monetización frente a la Competencia</h3>
+                <p>A diferencia de los modelos B2C basados en volumen de viaje, <strong>ConducIA</strong> se posiciona como una capa de inteligencia superior que garantiza el ahorro.</p>
 
                 <table style="width: 100%; border-collapse: collapse; margin-top: 15px; background: white;">
                     <thead>
                         <tr style="background: #333; color: white;">
                             <th style="padding: 12px; text-align: left;">Característica</th>
-                            <th style="padding: 12px; text-align: left;">Competencia (Uber/Lyft)</th>
+                            <th style="padding: 12px; text-align: left;">Competencia (Uber/Lyft/Yellow)</th>
                             <th style="padding: 12px; text-align: left; background: #e74c3c;">Propuesta ConducIA</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Modelo de Ingresos</strong></td>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Comisión por viaje (20-30%)</td>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Suscripción Mensual (SaaS)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Modelo de Negocio</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Transaccional (Venta de trayecto)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">SaaS + Success Fee por ahorro</td>
                         </tr>
                         <tr>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Cliente Objetivo</strong></td>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Pasajero final (B2C)</td>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Gestores de Flotas (B2B)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Transparencia</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Caja negra (Precios algorítmicos)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Auditoría de tarifas en tiempo real</td>
                         </tr>
                         <tr>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Valor Añadido</strong></td>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Conectividad inmediata</td>
-                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Predicción de precios (Ahorro)</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Objetivo Final</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Maximizar ingresos por vehículo</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Maximizar ahorro del cliente</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>Gestión B2B</strong></td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd;">Cuentas corporativas básicas</td>
+                            <td style="padding: 12px; border-bottom: 1px solid #ddd; font-weight: bold;">Dashboard de optimización financiera</td>
                         </tr>
                     </tbody>
                 </table>
             </section>
 
             <section id="ejercicio3">
-                <h2>3. Planificación y Estrategia del Proyecto</h2>
+                <h2>4. Planificación y Estrategia del Proyecto</h2>
                 
-                <p>Nuestra propuesta de valor trasciende el análisis descriptivo. El objetivo central de <strong>ConducIA</strong> es ofrecer una solución de <em>arbitraje de tarifas</em> en tiempo real. En un mercado donde las empresas asumen sobrecostes innecesarios por falta de información, nuestro algoritmo actúa como un auditor inteligente que optimiza la toma de decisiones.</p>
+                <p>Para transformar nuestra propuesta en una herramienta operativa, hemos diseñado una hoja de ruta centrada en la <strong>escalabilidad técnica</strong> y el retorno de inversión. La estrategia se basa en un despliegue progresivo donde la precisión del algoritmo de arbitraje aumenta conforme se integran más variables históricas y en tiempo real.</p>
 
                 <div class="estrategia-container" style="display: flex; gap: 20px; margin: 30px 0; flex-wrap: wrap;">
-    
+
                     <div style="flex: 1; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; text-align: center; min-width: 250px;">
                         <div style="font-size: 2rem; margin-bottom: 10px;">📡</div>
-                        <h4 style="color: #2c3e50; margin-bottom: 10px;">1. Monitorización Estratégica</h4>
+                        <h4 style="color: #2c3e50; margin-bottom: 10px;">Fase I: Ingesta</h4>
                         <p style="font-size: 0.9rem; color: #555;">
-                            Vigilancia continua de variables críticas (clima, eventos, tráfico) para detectar activaciones tempranas de tarifas dinámicas en VTC.
+                            Configuración de pipelines automatizados para la monitorización de clima, eventos y tráfico, alimentando el motor de decisiones.
                         </p>
                     </div>
 
@@ -156,9 +189,9 @@
 
                     <div style="flex: 1; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 20px; text-align: center; min-width: 250px;">
                         <div style="font-size: 2rem; margin-bottom: 10px;">⚙️</div>
-                        <h4 style="color: #856404; margin-bottom: 10px;">2. Motor de Arbitraje</h4>
+                        <h4 style="color: #856404; margin-bottom: 10px;">Fase II: Modelado</h4>
                         <p style="font-size: 0.9rem; color: #856404;">
-                            El modelo evalúa el coste de oportunidad: compara la tarifa fija regulada (Taxi) frente a la volatilidad proyectada del algoritmo de VTC.
+                            Entrenamiento del modelo predictivo para anticipar picos de <em>Surge Pricing</em> y validar el coste de oportunidad en cada ruta.
                         </p>
                     </div>
 
@@ -166,28 +199,24 @@
 
                     <div style="flex: 1; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 20px; text-align: center; min-width: 250px;">
                         <div style="font-size: 2rem; margin-bottom: 10px;">📉</div>
-                        <h4 style="color: #155724; margin-bottom: 10px;">3. Optimización de Gasto</h4>
+                        <h4 style="color: #155724; margin-bottom: 10px;">Fase III: Despliegue</h4>
                         <p style="font-size: 0.9rem; color: #155724;">
-                            <strong>Recomendación Operativa:</strong> "Alerta de sobrecoste en VTC. Asignando ruta a Taxi Regulado. Ahorro estimado por trayecto: $18."
+                            Implementación de la interfaz de usuario y el dashboard B2B, materializando el ahorro directo en la factura de transporte.
                         </p>
                     </div>
 
                 </div>
 
-                <p>Esta lógica fundamenta nuestro modelo de sostenibilidad financiera: al reducir la factura de transporte de nuestros clientes corporativos, la suscripción al servicio se convierte en una inversión con retorno positivo inmediato.</p>
-                
-                <p>Para materializar esta visión, el equipo ha establecido el siguiente cronograma de desarrollo:</p>
+                <p>Esta metodología asegura que la suscripción al servicio se traduzca en una <strong>inversión con retorno positivo inmediato</strong> para nuestros clientes corporativos. A continuación, se detalla el cronograma establecido para cumplir con la entrega final en abril:</p>
 
                 <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        
                     <thead>
                         <tr style="background: #2c3e50; color: white; text-align: left;">
-                            <th style="padding: 15px;">Fase / Mes</th>
-                            <th style="padding: 15px;">Entregables Clave</th>
+                            <th style="padding: 15px;">Periodo</th>
+                            <th style="padding: 15px;">Hitos y Entregables</th>
                             <th style="padding: 15px;">Estado</th>
                         </tr>
                     </thead>
-
                     <tbody>
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 15px; font-weight: bold;">Febrero</td>
@@ -205,8 +234,8 @@
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 15px; font-weight: bold;">Marzo</td>
                             <td style="padding: 15px;">
-                                1. Desarrollo del Modelo Predictivo (ML).<br>
-                                2. Comparativa de precios Taxi vs VTC.
+                                1. Desarrollo del Motor Predictivo (ML).<br>
+                                2. Integración de comparativa Taxi vs VTC.
                             </td>
                             <td style="padding: 15px;">
                                 <span style="background: #fff3cd; color: #856404; padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: bold;">
@@ -217,8 +246,8 @@
                         <tr>
                             <td style="padding: 15px; font-weight: bold;">Abril</td>
                             <td style="padding: 15px;">
-                                1. Dashboard Interactivo para cliente.<br>
-                                2. Memoria final y Defensa.
+                                1. Desarrollo de Dashboard Interactivo.<br>
+                                2. Pruebas de usuario y Memoria Final.
                             </td>
                             <td style="padding: 15px;">
                                 <span style="background: #e2e3e5; color: #383d41; padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: bold;">
@@ -231,7 +260,7 @@
             </section>
             
             <section id="organizacion">
-                <h2>4. Organización del Equipo</h2>
+                <h2>5. Organización del Equipo</h2>
                 <p>Para asegurar el cumplimiento de los hitos, el equipo ha adoptado una metodología ágil con rutinas de sincronización diaria y un flujo de trabajo colaborativo basado en <strong>GitFlow</strong>.</p>
 
                 <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
