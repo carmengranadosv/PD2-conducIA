@@ -1,6 +1,6 @@
 COLUMNAS_YELLOW = {
     # Identificación / proveedor
-    "VendorID": "vendor_id",
+    #"VendorID": "vendor_id",
 
     # Fechas
     "tpep_pickup_datetime": "fecha_inicio",
@@ -23,7 +23,7 @@ COLUMNAS_YELLOW = {
     "ehail_fee": "ehail_fee",
     "improvement_surcharge": "recargo_mejora",
     "congestion_surcharge": "recargo_congestion",
-    "cbd_congestion_fee": "recargo_cbd",
+    #"cbd_congestion_fee": "recargo_cbd",
     "total_amount": "precio_total",
 
     # Pago
@@ -33,7 +33,7 @@ COLUMNAS_YELLOW = {
     "RatecodeID": "codigo_tarifa",
 
     # Otros
-    "store_and_fwd_flag": "store_and_fwd",
+    #"store_and_fwd_flag": "store_and_fwd",
     "trip_type": "tipo_viaje",
 }
 
