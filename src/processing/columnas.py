@@ -1,18 +1,20 @@
+# La columna común que falta es tipo_vehículo que se genera más tarde en función de si el vehículo es yellow o vtc
+
 COLUMNAS_YELLOW = {
     # Identificación / proveedor
     "VendorID": "vendor_id",
 
     # Fechas
-    "tpep_pickup_datetime": "fecha_inicio",
-    "tpep_dropoff_datetime": "fecha_fin",
+    "tpep_pickup_datetime": "fecha_inicio", # común
+    "tpep_dropoff_datetime": "fecha_fin", # común
 
     # Zonas
-    "PULocationID": "origen_id",
-    "DOLocationID": "destino_id",
+    "PULocationID": "origen_id", # común
+    "DOLocationID": "destino_id", # común
 
     # Viaje
     "passenger_count": "num_pasajeros",
-    "trip_distance": "distancia",
+    "trip_distance": "distancia", # común
 
     # Tarifas y precios
     "fare_amount": "tarifa_base",
@@ -47,15 +49,15 @@ COLUMNAS_FHVHV = {
     # Fechas
     "request_datetime": "fecha_solicitud",
     "on_scene_datetime": "fecha_llegada_conductor",
-    "pickup_datetime": "fecha_inicio",
-    "dropoff_datetime": "fecha_fin",
+    "pickup_datetime": "fecha_inicio", # común
+    "dropoff_datetime": "fecha_fin", # común
 
     # Zonas
-    "PULocationID": "origen_id",
-    "DOLocationID": "destino_id",
+    "PULocationID": "origen_id", # común
+    "DOLocationID": "destino_id", # común
 
     # Viaje
-    "trip_miles": "distancia",
+    "trip_miles": "distancia", # común
     "trip_time": "duracion_seg",
 
     # Precios y pagos
