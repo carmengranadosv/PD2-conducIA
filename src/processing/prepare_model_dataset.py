@@ -13,7 +13,7 @@ OUTPUT_FILE = "dataset.parquet"
 def cargar_y_unificar(ruta_patron):
     """Carga todos los parquets y les asigna su etiqueta de tipo."""
     archivos = glob.glob(ruta_patron)
-    print(f"📂 Detectados {len(archivos)} archivos. Iniciando carga...")
+    print(f"Detectados {len(archivos)} archivos. Iniciando carga...")
     
     dfs = []
     for f in archivos:
@@ -31,17 +31,17 @@ def cargar_y_unificar(ruta_patron):
             
             dfs.append(df_temp)
         except Exception as e:
-            print(f"⚠️ Error leyendo {f}: {e}")
+            print(f"Error leyendo {f}: {e}")
             
     if not dfs:
         raise ValueError("No se pudieron cargar datos. Verifica la ruta.")
         
-    print("🔄 Unificando DataFrames...")
+    print("Unificando DataFrames...")
     return pd.concat(dfs, ignore_index=True)
 
 def imputar_logica_negocio(df):
     """Aplica las reglas de imputación (Taxi=0 espera, VTC=Probabilidad)."""
-    print("🛠️ Aplicando lógica de imputación...")
+    print("Aplicando lógica de imputación...")
     
     # 1. IMPUTACIÓN TAXIS (Espera = 0)
     mask_taxi = df['tipo'] == 'Yellow Taxi'
@@ -71,7 +71,7 @@ def imputar_logica_negocio(df):
 
 def limpieza_final_tipos(df):
     """Asegura que los tipos de datos sean eficientes."""
-    print("✨ Optimizando tipos de datos...")
+    print("Optimizando tipos de datos...")
     
     # Rellenar cualquier residuo con valores por defecto seguros
     df['num_pasajeros'] = df['num_pasajeros'].fillna(1).astype('int32')
@@ -102,7 +102,7 @@ def main():
     ruta_final = os.path.join(OUTPUT_DIR, OUTPUT_FILE)
     print(f"Guardando dataset maestro en: {ruta_final}")
     df.to_parquet(ruta_final, index=False)
-    print("✅ ¡Proceso terminado con éxito!")
+    print("¡Proceso terminado con éxito!")
 
 if __name__ == "__main__":
     main()
