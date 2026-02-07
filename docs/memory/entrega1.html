@@ -34,7 +34,7 @@
         <nav class="indice-centrado">
             <h3>Contenidos de la Entrega</h3>
             <ul>
-                <li><a href="#ejercicio1">1. Fuentes de Datos</a></li>
+                <li><a href="#ejercicio1">1. Ingeniería y Fuentes de Datos</a></li>
                 <li><a href="#propuesta">2. Propuesta: ConducIA</a></li>
                 <li><a href="#ejercicio2">3. Estudio de Mercado</a></li>
                 <li><a href="#ejercicio3">4. Planificación</a></li>
@@ -47,35 +47,66 @@
         <main class="cuerpo-memoria">
             
             <section id="ejercicio1">
-                <h2>1. Selección de fuentes y visualización</h2>
-                <p>Para transformar los datos brutos de la <strong>NYC Taxi & Limousine Commission (TLC)</strong>, hemos diseñado una arquitectura ETL automatizada.</p>
-                
+                <h2>1. Selección de fuentes e Ingeniería de Datos</h2>
+                <p>Para transformar los datos brutos en una ventaja competitiva, 
+                    hemos diseñado una <strong>arquitectura ETL (Extract, Transform, Load)</strong> 
+                     automatizada para la descarga, limpieza y procesado de los datos para los modelos predictivos.</p>
+
                 <h3>1.1 Selección de Fuentes Relevantes</h3>
                 <div class="caja-tecnica" style="background: #f9f9f9; padding: 15px; border-left: 5px solid #2c3e50; margin-bottom: 20px;">
                     <ul>
-                        <li><strong>Yellow Taxi Trip Records:</strong> Representa el mercado tradicional (tarifas fijas/reguladas). Fundamental para entender la oferta base.</li>
-                        <li><strong>High Volume FHV (Uber/Lyft):</strong> Representa el mercado de precios dinámicos (Surge Pricing). Clave para nuestra propuesta de optimización de costes.</li>
-                        <li><strong>Taxi Zone Lookup:</strong> Dato geoespacial que nos permite segmentar el análisis por barrios y distritos comerciales.</li>
+                        <li><strong>Yellow Taxi Trip Records (TLC):</strong> Datos oficiales del mercado regulado. Fundamental para establecer la línea base de tarifas fijas.</li>
+                        <li><strong>High Volume FHV (Uber/Lyft):</strong> Datos masivos de VTCs. Clave para detectar patrones de <em>Surge Pricing</em> dinámico.</li>
+                        <li><strong>Taxi Zone Lookup:</strong> Dato geoespacial que nos permite segmentar el análisis por barrios y zonas comerciales.</li>
+                        <li><strong>Open-Meteo Historical Weather API:</strong> Fuente meteorológica de alta precisión. Extraemos datos específicos por distrito y hora.</li>
                     </ul>
                 </div>
 
-                <h3>1.2 Visualización para la Propuesta de Negocio</h3>
-                <p>El procesamiento de los datos (ETL) nos ha permitido generar evidencias visuales que justifican la necesidad de <strong>ConducIA</strong>:</p>
+                <h3>1.2 Proceso de Limpieza y Calidad</h3>
+                <p>Tras la ingesta de datos brutos, aplicamos reglas de negocio estrictas para eliminar ruido y errores técnicos del sistema de la TLC. Nuestro pipeline filtra automáticamente:</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.9rem;">
+                    <tr style="background: #eee;">
+                        <th style="padding: 10px; border: 1px solid #ddd;">Filtro Aplicado</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">Justificación Técnica</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Consistencia Temporal</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">Eliminación de viajes con duración negativa o fechas futuras (errores de taxímetro).</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Nueva columna de Velocidad</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">Cálculo de velocidad media (mph) para poder detectar atascos y cambios de precio debido al flujo de tráfico.</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Integridad Geoespacial</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">Eliminación de zonas etiquetadas como "Unknown" o "NV" para asegurar la precisión del algoritmo de <em>ConducIA</em>.</td>
+                    </tr>
+                </table>
+
+                <h3>1.3 Enriquecimiento Multidimensional</h3>
+                <p>Hemos implementado un enriquecimiento de los datos:</p>
+                <ul style="list-style-type: circle; margin-left: 20px; color: #555;">
+                    <li style="margin-bottom: 8px;"><strong>Micro-Clima por Barrio:</strong> Cruzamos cada viaje no solo por hora, sino por su <strong>Barrio de Origen</strong> (Manhattan, Queens, Brooklyn, etc.). Esto permite detectar si una tormenta local en Queens dispara los precios allí mientras Manhattan sigue estable.</li>
+                    <li style="margin-bottom: 8px;"><strong>Indicadores Binarios:</strong> Para optimizar el rendimiento del Machine Learning, hemos transformado las precipitaciones en variables lógicas de impacto (<em>¿Llueve? Sí/No</em>), eliminando el ruido de milímetros insignificantes.</li>
+                    <li style="margin-bottom: 8px;"><strong>Ordenamiento Cronológico:</strong> Garantizamos que el dataset final esté perfectamente ordenado por fecha y hora para permitir el entrenamiento de modelos de series temporales sin riesgo de <em>Data Leakage</em> (fugas de información futura).</li>
+                </ul>
+
+                <h3>1.4 Visualización Preliminar</h3>
+                <p><strong>AQUI PONDREMOS GRÁFICAS DE INTERES EXTRAIDAS DE LOS DATOS</strong></p>
 
                 <div>
                     <img src="heatmap.png" alt="Mapa de Calor de rutas frecuentes" style="width: 100%; border: 1px solid #ddd;">
                     <p class="caption">
                         <strong>Figura 1.1: Concentración de la Demanda.</strong> 
-                        El mapa de calor demuestra que el 80% de los viajes se concentran en rutas específicas (Aeropuertos <-> Manhattan). 
-                        <br><em>Argumento:</em> Nuestra herramienta se enfocará solo en estos "corredores de oro" donde la competencia y el ahorro potencial son máximos.
+                        El 80% de los viajes se concentran en rutas específicas (Aeropuertos <-> Manhattan), validando nuestro enfoque en "corredores de oro".
                     </p>
                 </div>
                 <div class="contenedor-grafico">
                     <img src="anomalias.png" alt="Gráfico de anomalías temporales" style="width: 100%; border: 1px solid #ddd;">
                     <p class="caption">
                         <strong>Figura 1.2: Volatilidad Temporal.</strong> 
-                        Hemos detectado picos anómalos (puntos rojos) asociados a eventos y clima.
-                        <br><em>Argumento:</em> La existencia de estas anomalías valida nuestro modelo: predecir estos picos permite a las empresas cambiar de VTC a Taxi tradicional antes de que suban los precios.
+                        Detección de picos anómalos asociados a eventos climáticos, ahora correlacionados con nuestros indicadores de lluvia/nieve.
                     </p>
                 </div> 
             </section>
