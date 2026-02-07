@@ -1,11 +1,15 @@
 import argparse
 from pathlib import Path
 
+# Configuración
 from src.config import RAW_DIR, PROCESSED_DIR, DATA_DIR
+#Descargas
 from src.io.download_tlc import download, month_range
 from src.io.download_tlc import ensure_taxi_zone_lookup
+from src.io.weather import download_weather_data
+# Procesamiento
 from src.processing.clean_tlc import clean_file
-from src.processing.enrich_tlc import enrich_with_zones
+from src.processing.enrich_tlc import enrich_data
 
 
 def main():
@@ -21,8 +25,12 @@ def main():
     services = [s.lower() for s in args.services]
 
     LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
+    WEATHER_PATH = DATA_DIR / "external" / "nyc_weather.parquet"
     if not args.skip_enrich:
+        # 1. Zonas
         print(ensure_taxi_zone_lookup(LOOKUP_PATH, overwrite=args.overwrite))
+        # 2. Clima
+        download_weather_data(args.start, args.end, WEATHER_PATH, overwrite=args.overwrite)
 
 
     # 1) Descargar
@@ -55,7 +63,7 @@ def main():
                 if not LOOKUP_PATH.exists():
                     print(f" Error: No encuentro el CSV de zonas en {LOOKUP_PATH}")
                 else:
-                    msg_enrich = enrich_with_zones(out_path, LOOKUP_PATH)
+                    msg_enrich = enrich_data(out_path, LOOKUP_PATH, WEATHER_PATH)
                     print(f" {msg_enrich}")
 
     print("\n✅ PIPELINE COMPLETADO")

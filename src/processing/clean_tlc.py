@@ -41,18 +41,29 @@ def _convertir_tipos_base(df: pd.DataFrame) -> None:
 def _aplicar_limpieza_comun(df: pd.DataFrame, service: str) -> pd.DataFrame:
     _convertir_tipos_base(df)
 
+    # 1. Filtro de consistencia temporal
     if "fecha_fin" in df.columns and "fecha_inicio" in df.columns:
+        df = df[df["fecha_fin"] > df["fecha_inicio"]].copy() # Estricto mayor que
         df["duracion_min"] = (df["fecha_fin"] - df["fecha_inicio"]).dt.total_seconds() / 60
 
+    # 2. Filtros Físicos (Hard Limits)
+    df = df[
+        (df["distancia"] > 0.1) & (df["distancia"] < 200) & # 1000 millas es demasiado para un taxi urbano
+        (df["duracion_min"] > 1) & (df["duracion_min"] < 180) # Más de 3 horas es raro/error
+    ].copy()
+
+    # 3. Filtro de Velocidad
+    df["velocidad_mph"] = df["distancia"] / (df["duracion_min"] / 60)
+
+    # 4. Eliminamos las zonas desconocidas
+    # También eliminamos si el ID es nulo.
+    if "origen_id" in df.columns and "destino_id" in df.columns:
+        df = df[~df["origen_id"].isin([264, 265])]
+        df = df[~df["destino_id"].isin([264, 265])]
+
+    # Limpieza de nulos en columnas críticas
     cols_criticas = [c for c in COMMON_COLS if c in df.columns] + ["duracion_min"]
     df = df.dropna(subset=cols_criticas).copy()
-
-    df = df[df["fecha_fin"] >= df["fecha_inicio"]].copy()
-
-    df = df[
-        (df["distancia"] > 0) & (df["distancia"] < 1000) &
-        (df["duracion_min"] > 1) & (df["duracion_min"] < 300)
-    ].copy()
 
     df["tipo_vehiculo"] = service
 
