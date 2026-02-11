@@ -146,6 +146,32 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
 
     return df[cols_a_mantener].dropna().copy()
 
+def _imputacion_negocio(df: pd.DataFrame, service: str) -> pd.DataFrame:
+    """
+    Imputación determinista y simple que sí corresponde a 'clean':
+    - Yellow: espera_min = 0
+    - Yellow: num_pasajeros: fillna(1) opcional
+    """
+    df = df.copy()
+    service = service.lower()
+
+    # Asegurar columna espera_min homogénea
+    if "espera_min" not in df.columns:
+        df["espera_min"] = pd.NA
+
+    if service == "yellow":
+        df["espera_min"] = df["espera_min"].fillna(0.0)
+
+        # opcional: si te interesa evitar NA en pasajeros en yellow
+        if "num_pasajeros" in df.columns:
+            df["num_pasajeros"] = df["num_pasajeros"].fillna(1)
+
+    # Para fhvhv: espera_min ya se calcula si hay fecha_solicitud.
+    # Si no existe o falta, mejor dejar NA (no inventar).
+
+    return df
+
+
 
 def clean_df(df: pd.DataFrame, service: str) -> pd.DataFrame:
     service = service.lower()
@@ -165,7 +191,11 @@ def clean_df(df: pd.DataFrame, service: str) -> pd.DataFrame:
     elif service == "fhvhv":
         df_procesado = _procesar_logica_fhvhv(df_procesado)
 
+        # Imputación de negocio (determinista)
+    df_procesado = _imputacion_negocio(df_procesado, service)
+
     return df_procesado
+
 
 
 def clean_file(in_path: Path, out_path: Path, service: str, overwrite: bool = False) -> str:

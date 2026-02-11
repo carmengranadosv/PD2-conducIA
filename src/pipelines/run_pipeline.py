@@ -19,6 +19,9 @@ WEATHER_PATH = DATA_DIR / "external" / "nyc_weather.parquet"
 HOLIDAYS_PATH = DATA_DIR / "external" / "holidays" / "nyc_holidays.parquet"
 EVENTS_PATH = DATA_DIR / "external" / "events" / "nyc_major_events.parquet"
 
+from src.processing.stats import print_dataset_stats
+
+
 
 def main():
     parser = argparse.ArgumentParser("Pipeline completo TLC")
@@ -105,6 +108,10 @@ def main():
                         EVENTS_PATH if EVENTS_PATH.exists() else None,
                     )
                     print(f"  {msg_enrich}")
+
+            print_dataset_stats(out_path)
+
+
 
     print("\n" + "="*60)
     print("✅ PIPELINE COMPLETADO")

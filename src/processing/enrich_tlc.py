@@ -61,6 +61,26 @@ def enrich_data(
             log_msg.append("Weather")
 
 
+        # ===== IMPUTACIÓN POST-ENRICH (CLIMA) =====
+
+        # flags lluvia/nieve -> 0
+        for col in ["lluvia", "nieve"]:
+            if col in df.columns:
+                df[col] = df[col].fillna(0).astype("int8")
+
+        # precipitación -> 0
+        if "precipitation" in df.columns:
+            df["precipitation"] = df["precipitation"].fillna(0).astype("float32")
+
+        # temp y viento -> mediana del mes (si todo fuese NaN, cae a 0)
+        for col in ["temp_c", "viento_kmh"]:
+            if col in df.columns:
+                med = df[col].median()
+                if pd.isna(med):
+                    med = 0.0
+                df[col] = df[col].fillna(med).astype("float32")
+
+
         # ===== FESTIVOS (solo columna es_festivo) =====
         if holidays_path and holidays_path.exists():
             df_holidays = pd.read_parquet(holidays_path)
