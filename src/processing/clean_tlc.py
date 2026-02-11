@@ -41,10 +41,6 @@ def _convertir_tipos_base(df: pd.DataFrame) -> None:
 def _aplicar_limpieza_comun(df: pd.DataFrame, service: str) -> pd.DataFrame:
     _convertir_tipos_base(df)
 
-    # --- FILTRO SOLO AÑO 2025 ---
-    if "fecha_inicio" in df.columns:
-        df = df[df["fecha_inicio"].dt.year == 2025].copy()
-
     # 1. Filtro de consistencia temporal
     if "fecha_fin" in df.columns and "fecha_inicio" in df.columns:
         df = df[df["fecha_fin"] > df["fecha_inicio"]].copy() # Estricto mayor que
@@ -176,8 +172,7 @@ def _imputacion_negocio(df: pd.DataFrame, service: str) -> pd.DataFrame:
     return df
 
 
-
-def clean_df(df: pd.DataFrame, service: str) -> pd.DataFrame:
+def clean_df(df: pd.DataFrame, service: str, month_filter: int = None) -> pd.DataFrame:
     service = service.lower()
     
     mapa_cols = _obtener_mapeo_columnas(service)
@@ -188,14 +183,21 @@ def clean_df(df: pd.DataFrame, service: str) -> pd.DataFrame:
 
     df_procesado = df[cols_in].rename(columns=mapa_cols).copy()
 
+    # --- FILTRO DE MES DINÁMICO ---
+    # Convertimos a datetime antes de limpiar para poder filtrar
+    if "fecha_inicio" in df_procesado.columns:
+        df_procesado["fecha_inicio"] = pd.to_datetime(df_procesado["fecha_inicio"], errors="coerce")
+        # Si nos pasan un mes, filtramos rigurosamente
+        if month_filter:
+            df_procesado = df_procesado[df_procesado["fecha_inicio"].dt.month == month_filter].copy()
+
     df_procesado = _aplicar_limpieza_comun(df_procesado, service)
 
     if service == "yellow":
         df_procesado = _procesar_logica_yellow(df_procesado)
     elif service == "fhvhv":
         df_procesado = _procesar_logica_fhvhv(df_procesado)
-
-        # Imputación de negocio (determinista)
+       # Imputación de negocio (determinista)
     df_procesado = _imputacion_negocio(df_procesado, service)
 
     return df_procesado
@@ -209,8 +211,20 @@ def clean_file(in_path: Path, out_path: Path, service: str, overwrite: bool = Fa
         return f"SKIP {out_path.name} (Ya existe)"
 
     try:
+        # Extraer el mes del nombre del archivo (ej: '...2025-11.parquet' -> 11)
+        try:
+            nombre_archivo = in_path.stem # 'yellow_tripdata_2025-11'
+            mes_str = nombre_archivo.split('-')[-1] # '11'
+            mes_a_filtrar = int(mes_str)
+        except:
+            mes_a_filtrar = None # Si el nombre no tiene el formato, no filtramos por mes
+            print(f"⚠️ No se pudo extraer el mes de {in_path.name}, se procesará sin filtro mensual.")
+
         df = pd.read_parquet(in_path)
-        df_clean = clean_df(df, service=service)
+        
+        # Pasamos el mes detectado a la limpieza
+        df_clean = clean_df(df, service=service, month_filter=mes_a_filtrar)
+        
         df_clean.to_parquet(out_path, index=False)
         return f"OK   {out_path.name} ({len(df_clean):,} registros procesados)"
     except Exception as e:
