@@ -138,7 +138,7 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
     # Solo estas columnas sobrevivirán. El resto se borra.
     cols_finales = [
         "fecha_inicio", "fecha_fin", "origen_id", "destino_id", 
-        "distancia", "duracion_min", "tipo_vehiculo",
+        "distancia", "duracion_min", "velocidad_mph", "tipo_vehiculo",
         "precio_base", "precio_total_est", "espera_min"
     ]
 
