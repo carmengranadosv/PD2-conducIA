@@ -3,13 +3,21 @@ from pathlib import Path
 
 # Configuración
 from src.config import RAW_DIR, PROCESSED_DIR, DATA_DIR
-#Descargas
+
+# Descargas
 from src.io.download_tlc import download, month_range
 from src.io.download_tlc import ensure_taxi_zone_lookup
 from src.io.weather import download_weather_data
+
 # Procesamiento
 from src.processing.clean_tlc import clean_file
 from src.processing.enrich_tlc import enrich_data
+
+# Rutas de datos adicionales
+LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
+WEATHER_PATH = DATA_DIR / "external" / "nyc_weather.parquet"
+HOLIDAYS_PATH = DATA_DIR / "external" / "holidays" / "nyc_holidays.parquet"
+EVENTS_PATH = DATA_DIR / "external" / "events" / "nyc_major_events.parquet"
 
 
 def main():
@@ -24,20 +32,45 @@ def main():
 
     services = [s.lower() for s in args.services]
 
-    LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
-    WEATHER_PATH = DATA_DIR / "external" / "nyc_weather.parquet"
+    # Generar datos auxiliares (festivos, eventos, tráfico) si no existen
     if not args.skip_enrich:
-        # 1. Zonas
+        from src.io.download_holidays import create_holidays_calendar
+        from src.io.download_events import create_major_events
+        
+        print("\n" + "="*60)
+        print("GENERANDO DATOS AUXILIARES")
+        print("="*60)
+        
+        # 1. Festivos
+        create_holidays_calendar(2025, 2025, HOLIDAYS_PATH, overwrite=args.overwrite)
+        
+        # 2. Eventos
+        create_major_events(EVENTS_PATH, overwrite=args.overwrite)
+        
+        print()
+
+    # Descargar zonas y clima
+    if not args.skip_enrich:
+        print("="*60)
+        print("DESCARGANDO DATOS BASE")
+        print("="*60)
         print(ensure_taxi_zone_lookup(LOOKUP_PATH, overwrite=args.overwrite))
-        # 2. Clima
         download_weather_data(args.start, args.end, WEATHER_PATH, overwrite=args.overwrite)
+        print()
 
-
-    # 1) Descargar
+    # Descargar TLC
+    print("="*60)
+    print("DESCARGANDO DATOS TLC")
+    print("="*60)
     for service in services:
         download(service, args.start, args.end, RAW_DIR)
+    print()
 
-    # 2) Limpiar
+    # Limpiar y Enriquecer
+    print("="*60)
+    print("LIMPIEZA Y ENRIQUECIMIENTO")
+    print("="*60)
+    
     months = month_range(args.start, args.end)
     for service in services:
         for mm in months:
@@ -55,18 +88,27 @@ def main():
                 print(f"FAIL {in_path.name} (no descargado)")
                 continue
 
+            # Limpiar
             msg = clean_file(in_path, out_path, service=service, overwrite=args.overwrite)
             print(msg)
 
-            # Enriquecer con Zonas
+            # Enriquecer
             if not args.skip_enrich and out_path.exists():
                 if not LOOKUP_PATH.exists():
-                    print(f" Error: No encuentro el CSV de zonas en {LOOKUP_PATH}")
+                    print(f"   No encuentro {LOOKUP_PATH}")
                 else:
-                    msg_enrich = enrich_data(out_path, LOOKUP_PATH, WEATHER_PATH)
-                    print(f" {msg_enrich}")
+                    msg_enrich = enrich_data(
+                        out_path, 
+                        LOOKUP_PATH, 
+                        WEATHER_PATH if WEATHER_PATH.exists() else None,
+                        HOLIDAYS_PATH if HOLIDAYS_PATH.exists() else None,
+                        EVENTS_PATH if EVENTS_PATH.exists() else None,
+                    )
+                    print(f"  {msg_enrich}")
 
-    print("\n✅ PIPELINE COMPLETADO")
+    print("\n" + "="*60)
+    print("✅ PIPELINE COMPLETADO")
+    print("="*60)
 
 
 if __name__ == "__main__":

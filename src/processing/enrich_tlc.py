@@ -1,42 +1,39 @@
 import pandas as pd
 from pathlib import Path
 
-def enrich_data(file_path: Path, lookup_path: Path, weather_lookup_path: Path = None) -> str:
+def enrich_data(
+    file_path: Path, 
+    lookup_path: Path, 
+    weather_lookup_path: Path = None,
+    holidays_path: Path = None,
+    events_path: Path = None,
+    traffic_path: Path = None
+) -> str:
     """
-    Lee un archivo parquet limpio.
-    1. Añade nombres de zonas (Barrio/Zona) usando el lookup de TLC.
-    2. Añade datos de clima correspondientes a la hora y el barrio de origen.
-    3. Ordena cronológicamente
-    Sobreescribe el archivo original.
+    Enriquece datos con zonas, clima, festivos, eventos y tráfico.
     """
     try:
-        # 1. Cargar datos limpios y tabla de zonas
         df = pd.read_parquet(file_path)
         log_msg = []
 
-        # PARTE 1: ENRIQUECIMIENTO DE ZONAS
+        # ===== ZONAS =====
         if not lookup_path.exists():
             return f" No se encuentra {lookup_path.name}"
             
         zones = pd.read_csv(lookup_path)
-        
-        # Asegurar que no hay duplicados en el ID
         zones = zones.drop_duplicates(subset=['LocationID'])
         
-        # Preparamos el diccionario para mapear
-        
-        # 2. MERGE PARA ORIGEN
+        # Merge origen
         df = df.merge(
             zones[['LocationID', 'Zone', 'Borough']], 
             left_on='origen_id', 
             right_on='LocationID', 
             how='left'
         )
-        # Renombramos y limpiamos
         df.rename(columns={'Zone': 'origen_zona', 'Borough': 'origen_barrio'}, inplace=True)
-        df.drop(columns=['LocationID'], inplace=True)
+        df.drop(columns=['LocationID'], inplace=True, errors='ignore')
 
-        # 3. MERGE PARA DESTINO
+        # Merge destino
         df = df.merge(
             zones[['LocationID', 'Zone', 'Borough']], 
             left_on='destino_id', 
@@ -44,47 +41,77 @@ def enrich_data(file_path: Path, lookup_path: Path, weather_lookup_path: Path = 
             how='left'
         )
         df.rename(columns={'Zone': 'destino_zona', 'Borough': 'destino_barrio'}, inplace=True)
-        df.drop(columns=['LocationID'], inplace=True)
-
+        df.drop(columns=['LocationID'], inplace=True, errors='ignore')
+        
         log_msg.append("Zones")
 
-        # PARTE 2: ENRIQUECIMIENTO DE CLIMA
-        # Solo ejecutamos si tenemos el archivo de clima y si ya tenemos el barrio de origen
+        # ===== CLIMA =====
         if weather_lookup_path and weather_lookup_path.exists() and 'origen_barrio' in df.columns:
-            
             df_weather = pd.read_parquet(weather_lookup_path)
-            
-            # 1. Creamos una columna temporal redondeada a la hora para hacer el match
             df['temp_hora_join'] = df['fecha_inicio'].dt.floor('h')
 
-            # 2. MERGE DOBLE:
-            # Cruzamos por HORA y por BARRIO DE ORIGEN.
             df = df.merge(
                 df_weather,
-                left_on=['temp_hora_join', 'origen_barrio'], # Claves en tus viajes
-                right_on=['fecha_hora', 'borough'],          # Claves en el clima
+                left_on=['temp_hora_join', 'origen_barrio'],
+                right_on=['fecha_hora', 'borough'],
                 how='left'
             )
 
-            # 3. Limpieza de columnas auxiliares que sobran tras el merge
-            cols_to_drop = ['temp_hora_join', 'fecha_hora', 'borough']
-            df.drop(columns=[c for c in cols_to_drop if c in df.columns], inplace=True)
-            
+            df.drop(columns=['temp_hora_join', 'fecha_hora', 'borough'], inplace=True, errors='ignore')
             log_msg.append("Weather")
 
-        # 3. Ordenar cronológicamente
-        df.sort_values(by='fecha_inicio', inplace=True)
 
-        # PARTE 3: ORDENAR POR FECHA
+        # ===== FESTIVOS (solo columna es_festivo) =====
+        if holidays_path and holidays_path.exists():
+            df_holidays = pd.read_parquet(holidays_path)
+            df['fecha_date'] = df['fecha_inicio'].dt.date
+            df_holidays['fecha_date'] = df_holidays['fecha'].dt.date
+            
+            # SOLO tomar fecha_date y es_festivo
+            df = df.merge(
+                df_holidays[['fecha_date', 'es_festivo']],
+                on='fecha_date',
+                how='left'
+            )
+            
+            # Limpiar columnas temporales
+            df.drop(columns=['fecha_date'], inplace=True, errors='ignore')
+            
+            # Convertir a binario (0 o 1)
+            df['es_festivo'] = df['es_festivo'].fillna(0).astype('int8')
+            
+            log_msg.append("Holidays")
+
+        # ===== EVENTOS (solo columna hay_evento) =====
+        if events_path and events_path.exists():
+            df_events = pd.read_parquet(events_path)
+            df['fecha_date'] = df['fecha_inicio'].dt.date
+            df_events['fecha_date'] = df_events['fecha'].dt.date
+            
+            # SOLO tomar fecha_date y hay_evento (nada más)
+            df = df.merge(
+                df_events[['fecha_date', 'hay_evento']],
+                on='fecha_date',
+                how='left'
+            )
+            
+            # Limpiar columnas temporales
+            df.drop(columns=['fecha_date'], inplace=True, errors='ignore')
+            
+            # Convertir a binario (0 o 1)
+            df['hay_evento'] = df['hay_evento'].fillna(0).astype('int8')
+            
+            log_msg.append("Events")
+
+        # ===== ORDENAR =====
         if 'fecha_inicio' in df.columns:
-            df['fecha_inicio'] = pd.to_datetime(df['fecha_inicio'])
             df.sort_values(by='fecha_inicio', inplace=True)
             log_msg.append("Sorted")
 
-        # Guardar 
+        # Guardar
         df.to_parquet(file_path, index=False)
         
-        return f"Archivo modificado: {file_path.name} ({', '.join(log_msg)})"
+        return f" {file_path.name} ({', '.join(log_msg)})"
 
     except Exception as e:
-        return f"Error: {file_path.name}: {str(e)}"
+        return f" {file_path.name}: {str(e)}"
