@@ -41,6 +41,10 @@ def _convertir_tipos_base(df: pd.DataFrame) -> None:
 def _aplicar_limpieza_comun(df: pd.DataFrame, service: str) -> pd.DataFrame:
     _convertir_tipos_base(df)
 
+    # --- FILTRO SOLO AÑO 2025 ---
+    if "fecha_inicio" in df.columns:
+        df = df[df["fecha_inicio"].dt.year == 2025].copy()
+
     # 1. Filtro de consistencia temporal
     if "fecha_fin" in df.columns and "fecha_inicio" in df.columns:
         df = df[df["fecha_fin"] > df["fecha_inicio"]].copy() # Estricto mayor que
