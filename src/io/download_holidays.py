@@ -17,15 +17,16 @@ def create_holidays_calendar(start_year: int, end_year: int, output_path: Path, 
     holidays = []
     for year in range(start_year, end_year + 1):
         holidays.extend([
-            f'{year}-01-01',  # New Year
-            f'{year}-01-15',  # MLK Day (aprox)
-            f'{year}-02-17',  # Presidents Day (aprox)
-            f'{year}-05-26',  # Memorial Day (aprox)
+            f'{year}-01-01',  # New Year's Day
+            f'{year}-01-20',  # Martin Luther King Jr. Day (3er lunes enero 2025)
+            f'{year}-02-17',  # Presidents Day (3er lunes febrero 2025)
+            f'{year}-05-26',  # Memorial Day (último lunes mayo 2025)
             f'{year}-07-04',  # Independence Day
-            f'{year}-09-01',  # Labor Day (aprox)
-            f'{year}-11-27',  # Thanksgiving (aprox)
-            f'{year}-12-25',  # Christmas
-            f'{year}-12-31',  # New Year Eve
+            f'{year}-09-01',  # Labor Day (1er lunes septiembre 2025)
+            f'{year}-10-13',  # Columbus Day (2º lunes octubre 2025)
+            f'{year}-11-11',  # Veterans Day
+            f'{year}-11-27',  # Thanksgiving Day (4º jueves noviembre 2025)
+            f'{year}-12-25',  # Christmas Day
         ])
     
     # DataFrame de festivos

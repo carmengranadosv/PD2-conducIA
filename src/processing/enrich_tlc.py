@@ -46,18 +46,23 @@ def enrich_data(
         log_msg.append("Zones")
 
         # ===== CLIMA =====
-        if weather_lookup_path and weather_lookup_path.exists() and 'origen_barrio' in df.columns:
+        if weather_lookup_path and weather_lookup_path.exists() and "origen_barrio" in df.columns:
             df_weather = pd.read_parquet(weather_lookup_path)
-            df['temp_hora_join'] = df['fecha_inicio'].dt.floor('h')
+
+            # Normaliza timezone (evita merges que no matchean por tz)
+            df_weather["fecha_hora"] = pd.to_datetime(df_weather["fecha_hora"]).dt.tz_localize(None)
+
+            # Asegura fecha_inicio sin tz + floor hora
+            df["temp_hora_join"] = pd.to_datetime(df["fecha_inicio"]).dt.tz_localize(None).dt.floor("h")
 
             df = df.merge(
                 df_weather,
-                left_on=['temp_hora_join', 'origen_barrio'],
-                right_on=['fecha_hora', 'borough'],
-                how='left'
+                left_on=["temp_hora_join", "origen_barrio"],
+                right_on=["fecha_hora", "borough"],
+                how="left",
             )
 
-            df.drop(columns=['temp_hora_join', 'fecha_hora', 'borough'], inplace=True, errors='ignore')
+            df.drop(columns=["temp_hora_join", "fecha_hora", "borough"], inplace=True, errors="ignore")
             log_msg.append("Weather")
 
 

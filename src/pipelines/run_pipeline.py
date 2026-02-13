@@ -13,12 +13,6 @@ from src.io.weather import download_weather_data
 from src.processing.clean_tlc import clean_file
 from src.processing.enrich_tlc import enrich_data
 
-# Rutas de datos adicionales
-LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
-WEATHER_PATH = DATA_DIR / "external" / "nyc_weather.parquet"
-HOLIDAYS_PATH = DATA_DIR / "external" / "holidays" / "nyc_holidays.parquet"
-EVENTS_PATH = DATA_DIR / "external" / "events" / "nyc_major_events.parquet"
-
 from src.processing.stats import print_dataset_stats
 
 
@@ -34,6 +28,13 @@ def main():
     args = parser.parse_args()
 
     services = [s.lower() for s in args.services]
+
+    # RUTAS
+    # Rutas de datos adicionales
+    LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
+    WEATHER_PATH = DATA_DIR / "external" / "weather" / f"nyc_weather_{args.start}_{args.end}.parquet"
+    HOLIDAYS_PATH = DATA_DIR / "external" / "holidays" / "nyc_holidays.parquet"
+    EVENTS_PATH = DATA_DIR / "external" / "events" / "nyc_major_events.parquet"
 
     # Generar datos auxiliares (festivos, eventos, tráfico) si no existen
     if not args.skip_enrich:
