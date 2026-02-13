@@ -14,17 +14,54 @@ def create_major_events(output_path: Path, overwrite: bool = False):
     print(" Creando calendario de eventos mayores...")
     
     # Eventos importantes 2025
+    # Eventos masivos NYC 2025
     events = [
-        '2025-01-01',  # New Year aftermath
+
+        # ENERO
+        '2025-01-01',  # New Year aftermath (resaca NYE)
+
+        # FEBRERO
         '2025-02-09',  # Super Bowl
-        '2025-03-17',  # St Patrick's Parade
-        '2025-06-29',  # Pride Parade
-        '2025-07-04',  # July 4th Fireworks
+
+        # MARZO
+        '2025-03-16',  # NYC Half Marathon
+        '2025-03-17',  # St Patrick's Day Parade
+
+        # ABRIL
+        '2025-04-19',  # Tribeca Film Festival (inicio aprox)
+        
+        # MAYO
+        '2025-05-04',  # Five Boro Bike Tour
+        '2025-05-26',  # Fleet Week NYC (inicio aprox)
+
+        # JUNIO
+        '2025-06-08',  # Puerto Rican Day Parade
+        '2025-06-29',  # NYC Pride Parade
+
+        # JULIO
+        '2025-07-04',  # Macy’s July 4th Fireworks
+
+        # AGOSTO
+        '2025-08-25',  # US Open (inicio aprox)
+
+        # SEPTIEMBRE
+        '2025-09-07',  # US Open Finals (aprox)
+
+        # OCTUBRE
+        '2025-10-31',  # Halloween Parade (Greenwich Village)
+
+        # NOVIEMBRE
         '2025-11-02',  # NYC Marathon
-        '2025-11-27',  # Thanksgiving Parade
-        '2025-12-31',  # NYE Times Square
+        '2025-11-27',  # Macy’s Thanksgiving Parade
+        '2025-11-28',  # Black Friday (shopping peak Manhattan + outlets)
+        '2025-11-29',  # Black Friday weekend effect
+        '2025-11-30',  # Cyber Weekend mobility impact
+
+        # DICIEMBRE
+        '2025-12-03',  # Rockefeller Tree Lighting (aprox)
+        '2025-12-31',  # New Year’s Eve Times Square
     ]
-    
+
     # DataFrame de eventos
     df_events = pd.DataFrame({'fecha': events})
     df_events['fecha'] = pd.to_datetime(df_events['fecha'])
