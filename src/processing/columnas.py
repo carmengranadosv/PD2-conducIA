@@ -68,6 +68,7 @@ COLUMNAS_FHVHV = {
     "congestion_surcharge": "recargo_congestion",
     "airport_fee": "recargo_aeropuerto",
     "cbd_congestion_fee": "recargo_cbd",
+    "payment_type": "tipo_pago",
     "tips": "propina",
     "driver_pay": "pago_conductor",
 
