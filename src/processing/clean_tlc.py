@@ -6,7 +6,7 @@ import numpy as np
 from src.processing.columnas import COLUMNAS_YELLOW, COLUMNAS_FHVHV
 
 # Definición de columnas troncales
-COMMON_COLS = ["fecha_inicio", "fecha_fin", "origen_id", "destino_id", "distancia"]
+COMMON_COLS = ["fecha_inicio", "fecha_fin", "origen_id", "destino_id", "distancia", "propina"]
 
 def _obtener_mapeo_columnas(service: str) -> dict:
     service = service.lower()
@@ -89,7 +89,7 @@ def _procesar_logica_yellow(df: pd.DataFrame) -> pd.DataFrame:
 
     # Eliminamos solo lo que sabemos que sobra
     cols_a_eliminar = [
-        "tarifa_base", "precio_total", "propina", "peajes", "extra", 
+        "tarifa_base", "precio_total", "peajes", "extra", 
         "mta_tax", "recargo_mejora", "recargo_congestion", "ehail_fee", 
         "tipo_pago", "codigo_tarifa", "tipo_viaje"
     ]
@@ -119,7 +119,7 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
     # Reconstrucción del Precio Total
     componentes_precio = [
         "peajes", "black_car_fund", "impuesto_ventas",
-        "recargo_congestion", "recargo_aeropuerto", "recargo_cbd", "propina"
+        "recargo_congestion", "recargo_aeropuerto", "recargo_cbd"
     ]
     
     for comp in componentes_precio:
@@ -139,7 +139,7 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
     cols_finales = [
         "fecha_inicio", "fecha_fin", "origen_id", "destino_id", 
         "distancia", "duracion_min", "velocidad_mph", "tipo_vehiculo",
-        "precio_base", "precio_total_est", "espera_min"
+        "precio_base", "precio_total_est", "espera_min", "propina"
     ]
 
     cols_a_mantener = [c for c in cols_finales if c in df.columns]
