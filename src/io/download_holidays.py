@@ -1,51 +1,67 @@
+# src/io/download_holidays.py
 import pandas as pd
+import requests
 from pathlib import Path
 
-def create_holidays_calendar(start_year: int, end_year: int, output_path: Path, overwrite: bool = False):
+def _coerce_date(s: str, is_end: bool) -> pd.Timestamp:
+    # si viene YYYY-MM → primer/último día del mes
+    if len(s) == 7:
+        ts = pd.to_datetime(s + "-01")
+        if is_end:
+            ts = ts + pd.offsets.MonthEnd(0)
+        return ts.normalize()
+    return pd.to_datetime(s).normalize()
+
+def _get_holidays_us_year(year: int) -> pd.DataFrame:
+    url = f"https://date.nager.at/api/v3/PublicHolidays/{year}/US"
+    r = requests.get(url, timeout=60)
+    r.raise_for_status()
+    df = pd.DataFrame(r.json())
+
+    # Normalizamos fecha a día
+    df["fecha"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    return df
+
+def create_holidays_calendar_range(start_date: str, end_date: str, output_path: Path, overwrite: bool = False):
     """
-    Crea calendario simple de festivos: fecha + es_festivo (1 o 0)
+    Calendario de festivos NYC:
+      - Federal (global=True)
+      - específicos de NY (US-NY)
+    Output:
+      - fecha
+      - es_festivo (0/1)
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     if output_path.exists() and not overwrite:
         print(f"SKIP Holidays ({output_path.name})")
         return
-    
-    print(f" Creando calendario de festivos {start_year}-{end_year}...")
-    
-    # Lista de festivos importantes
-    holidays = []
-    for year in range(start_year, end_year + 1):
-        holidays.extend([
-            f'{year}-01-01',  # New Year's Day
-            f'{year}-01-20',  # Martin Luther King Jr. Day (3er lunes enero 2025)
-            f'{year}-02-17',  # Presidents Day (3er lunes febrero 2025)
-            f'{year}-05-26',  # Memorial Day (último lunes mayo 2025)
-            f'{year}-07-04',  # Independence Day
-            f'{year}-09-01',  # Labor Day (1er lunes septiembre 2025)
-            f'{year}-10-13',  # Columbus Day (2º lunes octubre 2025)
-            f'{year}-11-11',  # Veterans Day
-            f'{year}-11-27',  # Thanksgiving Day (4º jueves noviembre 2025)
-            f'{year}-12-25',  # Christmas Day
-        ])
-    
-    # DataFrame de festivos
-    df_holidays = pd.DataFrame({'fecha': holidays})
-    df_holidays['fecha'] = pd.to_datetime(df_holidays['fecha'])
-    df_holidays['es_festivo'] = 1
-    
-    # Rango completo de fechas del período
-    start_date = f'{start_year}-01-01'
-    end_date = f'{end_year}-12-31'
-    date_range = pd.date_range(start=start_date, end=end_date, freq='D')
-    
-    # DataFrame completo
-    df_complete = pd.DataFrame({'fecha': date_range})
-    df_complete = df_complete.merge(df_holidays, on='fecha', how='left')
-    df_complete['es_festivo'] = df_complete['es_festivo'].fillna(0).astype(int)
-    
-    # Guardar
+
+    start = _coerce_date(start_date, is_end=False)
+    end   = _coerce_date(end_date,   is_end=True)
+    years = range(start.year, end.year + 1)
+
+    print(f" Descargando festivos (NYC/NY) {start_date} → {end_date}...")
+
+    df_all = pd.concat([_get_holidays_us_year(y) for y in years], ignore_index=True)
+    df_all = df_all.dropna(subset=["fecha"])
+
+    # Filtro/NY:
+    # - global True 
+    # - counties contiene US-NY
+    df_ny = df_all[
+        (df_all.get("global", False) == True)
+        | (df_all.get("counties").astype(str).str.contains("US-NY", na=False))
+    ].copy()
+
+    # Filtrar rango exacto
+    df_ny = df_ny[(df_ny["fecha"] >= start) & (df_ny["fecha"] <= end)].copy()
+
+    # Calendario completo
+    date_range = pd.date_range(start=start, end=end, freq="D")
+    df_complete = pd.DataFrame({"fecha": date_range})
+
+    df_complete["es_festivo"] = df_complete["fecha"].isin(df_ny["fecha"].drop_duplicates()).astype(int)
+
     df_complete.to_parquet(output_path, index=False)
-    
-    n_festivos = df_complete['es_festivo'].sum()
-    print(f"    Calendario: {len(df_complete)} días, {n_festivos} festivos")
+    print(f"    Calendario: {len(df_complete)} días, {df_complete['es_festivo'].sum()} festivos")
