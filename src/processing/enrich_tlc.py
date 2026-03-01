@@ -86,7 +86,7 @@ def enrich_data(
                 df[col] = df[col].fillna(med).astype("float32")
 
 
-        # ===== FESTIVOS (solo columna es_festivo) =====
+        # ===== FESTIVOS =====
         if holidays_path and holidays_path.exists():
             df_holidays = pd.read_parquet(holidays_path)
             df['fecha_date'] = df['fecha_inicio'].dt.date
@@ -106,27 +106,7 @@ def enrich_data(
             df['es_festivo'] = df['es_festivo'].fillna(0).astype('int8')
             
             log_msg.append("Holidays")
-
-        # ===== EVENTOS (solo columna hay_evento) =====
-        if events_path and events_path.exists():
-            df_events = pd.read_parquet(events_path)
-            df['fecha_date'] = df['fecha_inicio'].dt.date
-            df_events['fecha_date'] = df_events['fecha'].dt.date
             
-            # SOLO tomar fecha_date y hay_evento (nada más)
-            df = df.merge(
-                df_events[['fecha_date', 'hay_evento']],
-                on='fecha_date',
-                how='left'
-            )
-            
-            # Limpiar columnas temporales
-            df.drop(columns=['fecha_date'], inplace=True, errors='ignore')
-            
-            # Convertir a binario (0 o 1)
-            df['hay_evento'] = df['hay_evento'].fillna(0).astype('int8')
-            
-            log_msg.append("Events")
 
         # ===== ORDENAR =====
         if 'fecha_inicio' in df.columns:

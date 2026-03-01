@@ -33,12 +33,12 @@ def main():
     # Rutas de datos adicionales
     LOOKUP_PATH = DATA_DIR / "external" / "taxi_zone_lookup.csv"
     WEATHER_PATH = DATA_DIR / "external" / "weather" / f"nyc_weather_{args.start}_{args.end}.parquet"
-    HOLIDAYS_PATH = DATA_DIR / "external" / "holidays" / "nyc_holidays.parquet"
-    EVENTS_PATH = DATA_DIR / "external" / "events" / "nyc_major_events.parquet"
+    HOLIDAYS_PATH = DATA_DIR / "external" / "holidays" / f"nyc_holidays_{args.start}_{args.end}.parquet"
+    EVENTS_PATH = DATA_DIR / "external" / "events" / f"nyc_events_{args.start}_{args.end}.parquet"
 
     # Generar datos auxiliares (festivos, eventos, tráfico) si no existen
-    if not args.skip_enrich:
-        from src.io.download_holidays import create_holidays_calendar
+    if not args.skip_enrich:  
+        from src.io.download_holidays import create_holidays_calendar_range
         from src.io.download_events import create_major_events
         
         print("\n" + "="*60)
@@ -46,7 +46,7 @@ def main():
         print("="*60)
         
         # 1. Festivos
-        create_holidays_calendar(2025, 2025, HOLIDAYS_PATH, overwrite=args.overwrite)
+        create_holidays_calendar_range(args.start, args.end, HOLIDAYS_PATH, overwrite=args.overwrite)
         
         # 2. Eventos
         create_major_events(EVENTS_PATH, overwrite=args.overwrite)
