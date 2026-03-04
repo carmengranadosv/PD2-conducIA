@@ -1,3 +1,7 @@
+"""Aumentador de contexto: no limpia datos sino que añade
+información externa (clima, barrios, festivos) para dar más
+valor"""
+
 import pandas as pd
 from pathlib import Path
 
