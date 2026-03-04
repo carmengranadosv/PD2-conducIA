@@ -1,80 +1,71 @@
 import pandas as pd
 from pathlib import Path
+import io
+import urllib.request
 
-def create_major_events(output_path: Path, overwrite: bool = False):
-    """
-    Crea calendario simple de eventos: fecha + hay_evento (1 o 0)
-    """
+NYC_EVENTS_CSV = "https://data.cityofnewyork.us/api/views/6v4b-5gp4/rows.csv?accessType=DOWNLOAD"
+
+def classify_by_impact(row):
+    try:
+        asistencia = float(row.get('attendance', 0))
+    except (ValueError, TypeError):
+        asistencia = 0
+    e_type = str(row.get('event_type', '')).upper()
+    if asistencia >= 5000 or any(x in e_type for x in ['PARADE', 'MARATHON', 'STREET FESTIVAL']):
+        return "Masivo"
+    if 1000 <= asistencia < 5000 or any(x in e_type for x in ['STREET FAIR', 'SPECIAL EVENT']):
+        return "Medio"
+    return "No hay"
+
+def create_major_events(output_path: Path, year: int = 2025, overwrite: bool = False):
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
     if output_path.exists() and not overwrite:
         print(f"SKIP Events ({output_path.name})")
         return
-    
-    print(" Creando calendario de eventos mayores...")
-    
-    # Eventos importantes 2025
-    # Eventos masivos NYC 2025
-    events = [
 
-        # ENERO
-        '2025-01-01',  # New Year aftermath (resaca NYE)
+    try:
+        print(f" Descargando base de datos completa de eventos NYC...")
+        req = urllib.request.Request(NYC_EVENTS_CSV, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            df_raw = pd.read_csv(io.BytesIO(response.read()))
 
-        # FEBRERO
-        '2025-02-09',  # Super Bowl
-
-        # MARZO
-        '2025-03-16',  # NYC Half Marathon
-        '2025-03-17',  # St Patrick's Day Parade
-
-        # ABRIL
-        '2025-04-19',  # Tribeca Film Festival (inicio aprox)
+        df_raw.columns = [col.lower().replace(' ', '_') for col in df_raw.columns]
+        fecha_col = 'date_and_time' 
         
-        # MAYO
-        '2025-05-04',  # Five Boro Bike Tour
-        '2025-05-26',  # Fleet Week NYC (inicio aprox)
+        df_raw['fecha_dt'] = pd.to_datetime(df_raw[fecha_col], errors='coerce').dt.normalize()
+        df_year = df_raw[df_raw['fecha_dt'].dt.year == year].copy()
 
-        # JUNIO
-        '2025-06-08',  # Puerto Rican Day Parade
-        '2025-06-29',  # NYC Pride Parade
+        if df_year.empty:
+            df_daily = pd.DataFrame(columns=['fecha', 'evento_tipo', 'num_eventos'])
+        else:
+            df_year['evento_tipo'] = df_year.apply(classify_by_impact, axis=1)
+            impact_order = {"Masivo": 2, "Medio": 1, "No hay": 0}
+            df_year['prioridad'] = df_year['evento_tipo'].map(impact_order)
+            
+            # --- NUEVA LÓGICA DE AGREGACIÓN ---
+            # Agrupamos por fecha y calculamos el máximo de prioridad y el conteo de eventos
+            df_daily = df_year.groupby('fecha_dt').agg(
+                prioridad_max=('prioridad', 'max'),
+                num_eventos=('fecha_dt', 'count')
+            ).reset_index()
 
-        # JULIO
-        '2025-07-04',  # Macy’s July 4th Fireworks
+            # Mapeo inverso para recuperar el nombre de la categoría más alta
+            inv_map = {2: "Masivo", 1: "Medio", 0: "No hay"}
+            df_daily['evento_tipo'] = df_daily['prioridad_max'].map(inv_map)
+            df_daily = df_daily.rename(columns={'fecha_dt': 'fecha'})[['fecha', 'evento_tipo', 'num_eventos']]
 
-        # AGOSTO
-        '2025-08-25',  # US Open (inicio aprox)
+        # 4. Crear calendario completo
+        date_range = pd.date_range(start=f'{year}-01-01', end=f'{year}-12-31', freq='D')
+        df_final = pd.DataFrame({'fecha': date_range})
+        df_final = df_final.merge(df_daily, on='fecha', how='left')
+        
+        # Rellenar valores para días sin eventos
+        df_final['evento_tipo'] = df_final['evento_tipo'].fillna("No hay").astype(str)
+        df_final['num_eventos'] = df_final['num_eventos'].fillna(0).astype(int)
 
-        # SEPTIEMBRE
-        '2025-09-07',  # US Open Finals (aprox)
+        df_final.to_parquet(output_path, index=False)
+        print(f" EVENTOS Y CONTEO {year} CARGADOS: {df_final['evento_tipo'].value_counts().to_dict()}")
 
-        # OCTUBRE
-        '2025-10-31',  # Halloween Parade (Greenwich Village)
-
-        # NOVIEMBRE
-        '2025-11-02',  # NYC Marathon
-        '2025-11-27',  # Macy’s Thanksgiving Parade
-        '2025-11-28',  # Black Friday (shopping peak Manhattan + outlets)
-        '2025-11-29',  # Black Friday weekend effect
-        '2025-11-30',  # Cyber Weekend mobility impact
-
-        # DICIEMBRE
-        '2025-12-03',  # Rockefeller Tree Lighting (aprox)
-        '2025-12-31',  # New Year’s Eve Times Square
-    ]
-
-    # DataFrame de eventos
-    df_events = pd.DataFrame({'fecha': events})
-    df_events['fecha'] = pd.to_datetime(df_events['fecha'])
-    df_events['hay_evento'] = 1
-    
-    # Rango completo 2025
-    date_range = pd.date_range(start='2025-01-01', end='2025-12-31', freq='D')
-    df_complete = pd.DataFrame({'fecha': date_range})
-    df_complete = df_complete.merge(df_events, on='fecha', how='left')
-    df_complete['hay_evento'] = df_complete['hay_evento'].fillna(0).astype(int)
-    
-    # Guardar
-    df_complete.to_parquet(output_path, index=False)
-    
-    n_eventos = df_complete['hay_evento'].sum()
-    print(f"    Calendario: {len(df_complete)} días, {n_eventos} eventos")
+    except Exception as e:
+        print(f" ERROR EN DOWNLOAD_EVENTS: {e}")
+        raise

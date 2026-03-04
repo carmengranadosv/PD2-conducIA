@@ -111,6 +111,27 @@ def enrich_data(
             
             log_msg.append("Holidays")
             
+        # ===== EVENTOS (Categoría + Conteo) =====
+        if events_path and events_path.exists():
+            df_events = pd.read_parquet(events_path)
+            df['fecha_date'] = df['fecha_inicio'].dt.date
+            df_events['fecha_date'] = df_events['fecha'].dt.date
+            
+            # Unimos ambas columnas: evento_tipo y num_eventos
+            df = df.merge(
+                df_events[['fecha_date', 'evento_tipo', 'num_eventos']],
+                on='fecha_date',
+                how='left'
+            )
+            
+            df.drop(columns=['fecha_date'], inplace=True, errors='ignore')
+            
+            # Limpieza y tipos eficientes
+            df['evento_tipo'] = df['evento_tipo'].fillna("No hay").astype('category')
+            df['num_eventos'] = df['num_eventos'].fillna(0).astype('int16')
+            
+            log_msg.append("Events+Count") 
+
 
         # ===== ORDENAR =====
         if 'fecha_inicio' in df.columns:
