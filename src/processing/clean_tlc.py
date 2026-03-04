@@ -1,3 +1,6 @@
+"""Filtro de calidad: se decide qué datos son válidos y se 
+corrigen los errores de origen (como los ceros en las propinas)"""
+
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -72,8 +75,10 @@ def _aplicar_limpieza_comun(df: pd.DataFrame, service: str) -> pd.DataFrame:
 
 def _procesar_logica_yellow(df: pd.DataFrame) -> pd.DataFrame:
     """
-    LOGICA ORIGINAL (La que te funcionaba):
-    Usa 'Blacklist': Elimina columnas específicas y deja pasar el resto.
+    LOGICA ACTUALIZADA:
+    1. Filtra pasajeros y rangos de precio.
+    2. Convierte propinas no fiables (efectivo, disputas, etc.) a NULL (NaN).
+    3. Mantiene las filas con propina NULL para evitar sesgo de eliminación.
     """
     if "num_pasajeros" in df.columns:
         df = df[(df["num_pasajeros"] >= 0) & (df["num_pasajeros"] <= 8)].copy()
@@ -84,6 +89,12 @@ def _procesar_logica_yellow(df: pd.DataFrame) -> pd.DataFrame:
     else:
         return df.iloc[0:0].copy()
 
+    # --- NUEVA LÓGICA DE PROPINAS
+    # Si el pago NO es tarjeta (1), la propina no es fiable.
+    # La pasamos a NaN para que no ensucie la media, pero sin borrar el viaje.
+    if "tipo_pago" in df.columns and "propina" in df.columns:
+        df.loc[df["tipo_pago"] != 1, "propina"] = np.nan
+
     df["precio_base"] = df["tarifa_base"]
     df["precio_total_est"] = df["precio_total"]
 
@@ -93,15 +104,15 @@ def _procesar_logica_yellow(df: pd.DataFrame) -> pd.DataFrame:
         "mta_tax", "recargo_mejora", "recargo_congestion", "ehail_fee", "codigo_tarifa", "tipo_viaje"
     ]
     df = df.drop(columns=[c for c in cols_a_eliminar if c in df.columns], errors='ignore')
-
-    return df.dropna().copy()
+    return df.copy()
 
 
 def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
     """
-    LOGICA NUEVA (Estricta):
-    Usa 'Whitelist': Solo se queda con las columnas que definimos aquí.
-    Esto elimina las columnas extra que te daban problemas.
+    LOGICA ACTUALIZADA (Estricta + Regla del Profesor):
+    1. Usa Whitelist para limpiar columnas.
+    2. Aplica la lógica de NaN a propinas no fiables si existen.
+    3. Mantiene registros sin borrar nulos.
     """
     if "tarifa_base" not in df.columns:
         return df.iloc[0:0].copy()
@@ -114,6 +125,13 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
     if "fecha_solicitud" in df.columns:
         df["espera_min"] = (df["fecha_inicio"] - df["fecha_solicitud"]).dt.total_seconds() / 60
         df = df[(df["espera_min"] >= 0) & (df["espera_min"] <= 120)].copy()
+
+    # Aunque en FHVHV la mayoría son digitales, nos aseguramos de que
+    # si hay tipos de pago extraños o efectivos, la propina pase a NaN.
+    if "tipo_pago" in df.columns and "propina" in df.columns:
+        # En FHVHV a veces los códigos cambian, pero mantenemos la lógica: 
+        # si es 0.0, lo tratamos como "desconocido" (NaN) en lugar de "cero real"
+        df.loc[df["propina"] == 0, "propina"] = np.nan
 
     # Reconstrucción del Precio Total
     componentes_precio = [
@@ -134,7 +152,6 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
     df = df[(df["precio_total_est"] > 0) & (df["precio_total_est"] < 500)].copy()
 
     # --- LISTA BLANCA (WHITELIST) ---
-    # Solo estas columnas sobrevivirán. El resto se borra.
     cols_finales = [
         "fecha_inicio", "fecha_fin", "origen_id", "destino_id", 
         "distancia", "duracion_min", "velocidad_mph", "tipo_vehiculo",
@@ -143,7 +160,7 @@ def _procesar_logica_fhvhv(df: pd.DataFrame) -> pd.DataFrame:
 
     cols_a_mantener = [c for c in cols_finales if c in df.columns]
 
-    return df[cols_a_mantener].dropna().copy()
+    return df[cols_a_mantener].copy()
 
 def _imputacion_negocio(df: pd.DataFrame, service: str) -> pd.DataFrame:
     """

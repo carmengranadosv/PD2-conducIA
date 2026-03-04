@@ -1,3 +1,5 @@
+"""empaquetador final: junta todos los archivos limpios 
+y enriquecidos en uno solo para que la IA pueda leerlo"""
 import pandas as pd
 import numpy as np
 import glob
@@ -37,7 +39,7 @@ def cargar_y_unificar(ruta_patron):
     return pd.concat(dfs, ignore_index=True)
 
 def imputar_logica_negocio(df):
-    """Aplica las reglas de imputación (Taxi=0 espera, VTC=Probabilidad)."""
+    """Aplica las reglas de imputación (Taxi=0 espera, VTC=Probabilidad, Propinas=Mediana)."""
     print("\n Aplicando lógica de imputación...")
     
     # 1. IMPUTACIÓN TAXIS (Espera = 0)
@@ -50,11 +52,8 @@ def imputar_logica_negocio(df):
     # 2. IMPUTACIÓN VTC (Pasajeros = Probabilístico)
     if 'num_pasajeros' in df.columns:
         mask_taxi = df['tipo'] == 'Yellow Taxi'
-        
-        # Verificar que hay datos de taxis para calcular distribución
         if mask_taxi.sum() > 0 and not df.loc[mask_taxi, 'num_pasajeros'].isna().all():
             distribucion_real = df.loc[mask_taxi, 'num_pasajeros'].value_counts(normalize=True)
-            
             mask_vtc_vacios = (df['tipo'] == 'VTC') & (df['num_pasajeros'].isna())
             cantidad_vtc = mask_vtc_vacios.sum()
             
@@ -66,8 +65,16 @@ def imputar_logica_negocio(df):
                 )
                 df.loc[mask_vtc_vacios, 'num_pasajeros'] = valores_simulados
                 print(f"    VTC: {cantidad_vtc:,} valores de pasajeros simulados")
-        else:
-            print(f"     No hay suficientes datos de taxis para simular pasajeros VTC")
+
+    # 3. NUEVA IMPUTACIÓN DE PROPINAS 
+    if 'propina' in df.columns:
+        # Calculamos la mediana usando solo los valores que NO son nulos (propinas de tarjeta)
+        mediana_propina = df['propina'].median()
+        n_nulos_propina = df['propina'].isna().sum()
+        
+        # Rellenamos los NaN (efectivo/desconocidos) con esa mediana
+        df['propina'] = df['propina'].fillna(mediana_propina)
+        print(f" Propinas: {n_nulos_propina:,} valores nulos imputados con la mediana (${mediana_propina:.2f})")
     
     return df
 
