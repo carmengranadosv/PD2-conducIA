@@ -111,13 +111,13 @@ def enrich_data(
             
             log_msg.append("Holidays")
             
-        # ===== EVENTOS (Categoría + Conteo) =====
+        # ===== EVENTOS (Impacto + Cantidad) =====
         if events_path and events_path.exists():
             df_events = pd.read_parquet(events_path)
             df['fecha_date'] = df['fecha_inicio'].dt.date
             df_events['fecha_date'] = df_events['fecha'].dt.date
             
-            # Unimos ambas columnas: evento_tipo y num_eventos
+            # Merge de ambas columnas nuevas
             df = df.merge(
                 df_events[['fecha_date', 'evento_tipo', 'num_eventos']],
                 on='fecha_date',
@@ -126,11 +126,11 @@ def enrich_data(
             
             df.drop(columns=['fecha_date'], inplace=True, errors='ignore')
             
-            # Limpieza y tipos eficientes
+            # Rellenar nulos (por seguridad) y optimizar tipos
             df['evento_tipo'] = df['evento_tipo'].fillna("No hay").astype('category')
             df['num_eventos'] = df['num_eventos'].fillna(0).astype('int16')
             
-            log_msg.append("Events+Count") 
+            log_msg.append("Events_Detailed") 
 
 
         # ===== ORDENAR =====
