@@ -4,7 +4,8 @@ import glob
 from pathlib import Path
 
 # --- CONFIGURACIÓN DE RUTAS ---
-BASE_DIR = r'C:\Users\PC\Desktop\3ºGIDIA\PD2\PD2-conducIA'
+# Detecta la raíz del proyecto (sube tres niveles desde src/modelos/preparar_datosFinales/)
+BASE_DIR = Path(__file__).resolve().parents[3]
 INPUT_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean')
 OUTPUT_FILE = os.path.join(INPUT_DIR, 'csv_final.csv')
 
