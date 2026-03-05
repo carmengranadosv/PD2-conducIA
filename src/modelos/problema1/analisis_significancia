@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+
+def analizar_significancia_demanda(df):
+    # 1. Preparación de los datos (Agregación horaria)
+    df['hora_dt'] = df['fecha_inicio'].dt.floor('h')
+    
+    # Agregamos para tener "una foto" de cada hora en cada zona
+    df_resumen = df.groupby(['hora_dt', 'origen_id']).agg(
+        demanda=('fecha_inicio', 'count'),
+        temp_c=('temp_c', 'mean'),
+        viento_kmh=('viento_kmh', 'mean'),
+        lluvia=('lluvia', 'max'),
+        nieve=('nieve', 'max'),
+        es_festivo=('es_festivo', 'max'),
+        num_eventos=('num_eventos', 'max'),
+        vel_media_zona=('velocidad_mph', 'mean'),
+        espera_media_zona=('espera_min', 'mean')
+    ).reset_index()
+
+    # Añadimos variables temporales cíclicas
+    df_resumen['hora'] = df_resumen['hora_dt'].dt.hour
+    df_resumen['dia_semana'] = df_resumen['hora_dt'].dt.dayofweek
+
+    # 2. Matriz de Correlación
+    plt.figure(figsize=(12, 8))
+    corr = df_resumen.corr()
+    sns.heatmap(corr[['demanda']].sort_values(by='demanda', ascending=False), 
+                annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title("Correlación de variables con la Demanda")
+    plt.show()
+
+    # 3. Importancia mediante Random Forest (Feature Importance)
+    X = df_resumen.drop(columns=['hora_dt', 'demanda'])
+    y = df_resumen['demanda']
+    
+    # Entrenamos un modelo rápido para ver pesos
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(X, y)
+
+    importancias = pd.DataFrame({
+        'Variable': X.columns,
+        'Importancia': rf.feature_importances_
+    }).sort_values(by='Importancia', ascending=False)
+
+    print("\nRanking de variables más significativas para ConducIA:")
+    print(importancias)
+    
+    return importancias
+
+# Uso:
+df = pd.read_parquet("data/processed/tlc_clean/yellow/2025/clean_yellow_tripdata_2025-01.parquet")
+importancias = analizar_significancia_demanda(df)
