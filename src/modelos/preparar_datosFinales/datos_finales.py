@@ -9,7 +9,7 @@ INPUT_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean')
 # Cambiamos la extensión a .parquet
 OUTPUT_FILE = os.path.join(INPUT_DIR, 'dataset_final.parquet')
 
-# Muestra del 60% de los datos para cada mes (1=100%, 0.6=60%, etc.)
+# Muestra del 40% de los datos para cada mes (1=100%, 0.4=40%, etc.)
 SAMPLE_RATE = 0.4 
 
 def carga_datos_hibrida(anio_actual, anio_anterior):
