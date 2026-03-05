@@ -4,12 +4,13 @@ import glob
 from pathlib import Path
 
 # --- CONFIGURACIÓN DE RUTAS ---
-# Detecta la raíz del proyecto (sube tres niveles desde src/modelos/preparar_datosFinales/)
 BASE_DIR = Path(__file__).resolve().parents[3]
 INPUT_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean')
-OUTPUT_FILE = os.path.join(INPUT_DIR, 'csv_final.csv')
+# Cambiamos la extensión a .parquet
+OUTPUT_FILE = os.path.join(INPUT_DIR, 'dataset_final.parquet')
 
-SAMPLE_RATE = 0.01 
+# Muestra del 60% de los datos para cada mes (1=100%, 0.6=60%, etc.)
+SAMPLE_RATE = 0.4 
 
 def carga_datos_hibrida(anio_actual, anio_anterior):
     lista_muestras = []
@@ -61,9 +62,10 @@ def carga_datos_hibrida(anio_actual, anio_anterior):
     
     print(f"\nDataset Híbrido Creado: {len(df_final):,} registros totales.")
 
-    # --- EXPORTACIÓN A CSV ---
+    # --- EXPORTACIÓN A PARQUET ---
     print(f"Guardando en: {OUTPUT_FILE}...")
-    df_final.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
+    # Usamos motor 'pyarrow' o 'fastparquet' (por defecto suele ser snappy)
+    df_final.to_parquet(OUTPUT_FILE, index=False, compression='snappy')
     print("¡Hecho!")
     
     return df_final
