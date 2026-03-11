@@ -26,12 +26,18 @@ DIRECTORIO_DATOS = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean')
 INPUT_FILE = os.path.join(DIRECTORIO_DATOS, 'dataset_final.parquet')
 OUTPUT_FILE = os.path.join(DIRECTORIO_DATOS, 'datos_final.parquet')
 
-def limpiar_extremo_ram(ruta_input, ruta_output):
-    if not os.path.exists(ruta_input):
-        print(f"❌ Error: No se encuentra {ruta_input}")
-        return
+def asignar_franja_horaria(hora):
+    if 0 <= hora < 6: return 'Madrugada'
+    elif 6 <= hora < 12: return 'Mañana'
+    elif 12 <= hora < 16: return 'Mediodia'
+    elif 16 <= hora < 20: return 'Tarde'
+    else: return 'Noche'
 
-    print(f"📖 Modo supervivencia: Imputando falsos ceros...")
+def limpiar_y_enriquecer_extremo_ram(ruta_input, ruta_output):
+    print("\n Limpieza Extrema RAM + Variables Temporales...")
+    if not os.path.exists(ruta_input):
+        print(f" Error: No se encuentra {ruta_input}")
+        return
     
     parquet_file = pq.ParquetFile(ruta_input)
     # Usamos una muestra para obtener la mediana de las propinas reales
@@ -39,7 +45,7 @@ def limpiar_extremo_ram(ruta_input, ruta_output):
     mediana_val = df_mini_sample[df_mini_sample['propina'] > 0]['propina'].median()
     dist_pasajeros = df_mini_sample['num_pasajeros'].value_counts(normalize=True)
     
-    print(f"✅ Mediana calculada para imputar: ${mediana_val:.2f}")
+    print(f" Mediana calculada para imputar: ${mediana_val:.2f}")
     del df_mini_sample 
 
     writer = None
@@ -47,6 +53,15 @@ def limpiar_extremo_ram(ruta_input, ruta_output):
     try:
         for i in range(parquet_file.num_row_groups):
             df_chunk = parquet_file.read_row_group(i).to_pandas()
+
+            # --- VARIABLES TEMPORALES ---
+            if 'fecha_inicio' in df_chunk.columns:
+                df_chunk['hora'] = df_chunk['fecha_inicio'].dt.hour
+                df_chunk['dia_semana'] = df_chunk['fecha_inicio'].dt.dayofweek
+                df_chunk['es_fin_semana'] = df_chunk['dia_semana'].apply(lambda x: 1 if x >= 5 else 0).astype('int8')
+                df_chunk['franja_horaria'] = df_chunk['hora'].apply(asignar_franja_horaria)
+                df_chunk['hora_sen'] = np.sin(2 * np.pi * df_chunk['hora'] / 24).astype('float32')
+                df_chunk['hora_cos'] = np.cos(2 * np.pi * df_chunk['hora'] / 24).astype('float32')
             
             # --- TRANSFORMACIONES ---
             if 'tipo_pago' in df_chunk.columns:
@@ -71,18 +86,19 @@ def limpiar_extremo_ram(ruta_input, ruta_output):
                         dist_pasajeros.index, size=mask.sum(), p=dist_pasajeros.values
                     )
 
+            # Guardado
             table = pa.Table.from_pandas(df_chunk)
             if writer is None:
                 writer = pq.ParquetWriter(ruta_output, table.schema)
             writer.write_table(table)
             
-            print(f"⏳ Bloque {i+1}/{parquet_file.num_row_groups} procesado.")
+            print(f" Bloque {i+1}/{parquet_file.num_row_groups} procesado.")
             del df_chunk 
             
     finally:
         if writer:
             writer.close()
-            print(f"🚀 ¡ÉXITO! Archivo guardado en: {ruta_output}")
+            print(f" ¡ÉXITO! Archivo guardado en: {ruta_output}")
 
 if __name__ == "__main__":
-    limpiar_extremo_ram(INPUT_FILE, OUTPUT_FILE)
+    limpiar_y_enriquecer_extremo_ram(INPUT_FILE, OUTPUT_FILE)

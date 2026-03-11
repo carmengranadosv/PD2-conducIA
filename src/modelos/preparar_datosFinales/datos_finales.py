@@ -12,7 +12,7 @@ OUTPUT_FILE = os.path.join(INPUT_DIR, 'dataset_final.parquet')
 # Muestra del 40% de los datos para cada mes (1=100%, 0.4=40%, etc.)
 SAMPLE_RATE = 0.4 
 
-def carga_datos_hibrida(anio_actual, anio_anterior):
+def carga_datos_hibrida(input_dir, output_file, anio_actual, anio_anterior):
     lista_muestras = []
     
     for tipo in ['yellow', 'fhvhv']:
@@ -23,7 +23,7 @@ def carga_datos_hibrida(anio_actual, anio_anterior):
         ]
         
         for anio_objetivo, meses_a_buscar in objetivos:
-            ruta_busqueda = os.path.join(INPUT_DIR, tipo, str(anio_objetivo), "*.parquet")
+            ruta_busqueda = os.path.join(input_dir, tipo, str(anio_objetivo), "*.parquet")
             archivos_disponibles = sorted(glob.glob(ruta_busqueda))
             
             for archivo in archivos_disponibles:
@@ -55,7 +55,7 @@ def carga_datos_hibrida(anio_actual, anio_anterior):
     # Concatenación y ordenación final
     df_final = pd.concat(lista_muestras, ignore_index=True)
 
-    # --- NUEVO: ORDENACIÓN CRONOLÓGICA ---
+    # --- ORDENACIÓN CRONOLÓGICA ---
     print("\nOrdenando el dataset cronológicamente...")
     # Ordenamos por la fecha completa (Año-Mes-Día Hora) para que sea exacto
     df_final = df_final.sort_values(by=['fecha_inicio']).reset_index(drop=True)
@@ -63,13 +63,13 @@ def carga_datos_hibrida(anio_actual, anio_anterior):
     print(f"\nDataset Híbrido Creado: {len(df_final):,} registros totales.")
 
     # --- EXPORTACIÓN A PARQUET ---
-    print(f"Guardando en: {OUTPUT_FILE}...")
+    print(f"Guardando en: {output_file}...")
     # Usamos motor 'pyarrow' o 'fastparquet' (por defecto suele ser snappy)
-    df_final.to_parquet(OUTPUT_FILE, index=False, compression='snappy')
+    df_final.to_parquet(output_file, index=False, compression='snappy')
     print("¡Hecho!")
     
     return df_final
 
 if __name__ == "__main__":
     # Ejecutamos con tus parámetros
-    df_resultado = carga_datos_hibrida(anio_actual=2025, anio_anterior=2024)
+   df_resultado = carga_datos_hibrida(INPUT_DIR, OUTPUT_FILE, anio_actual=2025, anio_anterior=2024)
