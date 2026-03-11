@@ -1,5 +1,11 @@
 # ============================================================
-# BASELINE SIMPLE: PREDICCIÓN DE DEMANDA POR ZONA
+# BASELINE: PREDICCIÓN DE DEMANDA POR ZONA (PROBLEMA 1)
+# ============================================================
+# Modelos:
+#   1. Naive (persistencia): demanda(t+1) = demanda(t)
+#   2. Media histórica:      demanda(t+1) = mean(zona, hora, día_semana)
+#   3. Random Forest:        con lag features temporales
+# Target: número de viajes en la siguiente hora por zona origen
 # ============================================================
 
 import pandas as pd
@@ -7,248 +13,374 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import joblib
+import os
+import warnings
+warnings.filterwarnings('ignore')
+
+os.makedirs('data/outputs', exist_ok=True)
+os.makedirs('models/problema1', exist_ok=True)
 
 # ============================================================
-# PASO 1: CARGAR Y PREPARAR DATOS
+# PASO 1: CARGAR DATOS
 # ============================================================
 
 print("📊 Cargando datos...")
 
-# Cargar tu dataset limpio
-df = pd.read_parquet('data/processed/tlc_clean/yellow/2025/clean_yellow_tripdata_2025-01.parquet')
+# 'data/datos_reducidos.parquet' para pruebas, 'data/datos_final.parquet' para producción
+df = pd.read_parquet('data/datos_final.parquet')
 
-print(f"✅ Datos cargados: {len(df):,} viajes")
+print(f"✅ {len(df):,} viajes cargados")
+
+# Columnas del dataset:
+# fecha_inicio, fecha_fin, origen_id, destino_id, num_pasajeros,
+# distancia, propina, duracion_min, velocidad_mph, tipo_vehiculo,
+# precio_base, precio_total_est, espera_min, origen_zona, origen_barrio,
+# destino_zona, destino_barrio, temp_c, precipitation, viento_kmh,
+# lluvia, nieve, es_festivo, evento_tipo, num_eventos, mes_num
+
+df['fecha_inicio'] = pd.to_datetime(df['fecha_inicio'])
 print(f"📅 Período: {df['fecha_inicio'].min()} → {df['fecha_inicio'].max()}")
 
 # ============================================================
-# PASO 2: AGREGAR DATOS POR ZONA Y TIEMPO (30 MIN)
+# PASO 2: AGREGAR DEMANDA POR ZONA ORIGEN Y HORA
 # ============================================================
 
-print("\n🔄 Agregando datos por zona y períodos de 30 min...")
+print("\n🔄 Agregando demanda por zona y hora...")
 
-# Redondear timestamp a buckets de 30 min
-df['timestamp_30min'] = df['fecha_inicio'].dt.floor('30min')
+df['timestamp_hora'] = df['fecha_inicio'].dt.floor('1h')
 
-# Extraer features temporales simples
-df['hora'] = df['fecha_inicio'].dt.hour
-df['dia_semana'] = df['fecha_inicio'].dt.dayofweek
-df['mes'] = df['fecha_inicio'].dt.month
-df['dia_mes'] = df['fecha_inicio'].dt.day
+# Extraer features temporales antes de agregar
+df['hora']       = df['fecha_inicio'].dt.hour
+df['dia_semana'] = df['fecha_inicio'].dt.dayofweek   # 0=Lun, 6=Dom
+df['dia_mes']    = df['fecha_inicio'].dt.day
+df['es_finde']   = (df['dia_semana'] >= 5).astype(int)
 
-# Agregar: contar viajes por (zona_origen, timestamp_30min)
-df_agg = df.groupby(['origen_id', 'timestamp_30min']).agg({
-    'fecha_inicio': 'count',  # Número de viajes = DEMANDA
-    'hora': 'first',
-    'dia_semana': 'first',
-    'mes': 'first',
-    'dia_mes': 'first',
-    'origen_barrio': 'first',
-    'es_festivo': 'max',
-    'num_eventos': 'mean',
-    'lluvia': 'max',
-    'nieve': 'max',
-    'temp_c': 'mean',
-    'viento_kmh': 'mean',
-    'velocidad_mph': 'mean'
-}).rename(columns={'fecha_inicio': 'demanda'}).reset_index()
+df_agg = (
+    df.groupby(['origen_id', 'timestamp_hora'])
+    .agg(
+        demanda        = ('fecha_inicio', 'count'),
+        hora           = ('hora',         'first'),
+        dia_semana     = ('dia_semana',   'first'),
+        dia_mes        = ('dia_mes',      'first'),
+        mes_num        = ('mes_num',      'first'),
+        es_finde       = ('es_finde',     'first'),
+        temp_c         = ('temp_c',       'mean'),
+        precipitation  = ('precipitation','mean'),
+        viento_kmh     = ('viento_kmh',   'mean'),
+        velocidad_mph  = ('velocidad_mph','mean'),
+        lluvia         = ('lluvia',       'max'),
+        nieve          = ('nieve',        'max'),
+        es_festivo     = ('es_festivo',   'max'),
+        num_eventos    = ('num_eventos',  'mean'),
+    )
+    .reset_index()
+)
 
-print(f"✅ Datos agregados: {len(df_agg):,} registros")
-print(f"   Zonas únicas: {df_agg['origen_id'].nunique()}")
-print(f"   Demanda promedio: {df_agg['demanda'].mean():.1f} viajes/30min")
-
-# ============================================================
-# PASO 3: CREAR TARGET (Demanda en próximos 30 min)
-# ============================================================
-
-print("\n🎯 Creando target (demanda futura)...")
-
-# Ordenar por zona y tiempo
-df_agg = df_agg.sort_values(['origen_id', 'timestamp_30min'])
-
-# Target: demanda en SIGUIENTE período (30 min adelante)
-df_agg['target_demanda_next'] = df_agg.groupby('origen_id')['demanda'].shift(-1)
-
-# Eliminar filas sin target (último período de cada zona)
-df_agg = df_agg.dropna(subset=['target_demanda_next'])
-
-print(f"✅ Target creado: {len(df_agg):,} registros válidos")
+print(f"✅ Registros agregados: {len(df_agg):,}")
+print(f"   Zonas únicas:        {df_agg['origen_id'].nunique()}")
+print(f"   Demanda media:       {df_agg['demanda'].mean():.1f} viajes/hora")
+print(f"   Demanda máx:         {df_agg['demanda'].max():.0f} viajes/hora")
 
 # ============================================================
-# PASO 4: DEFINIR FEATURES Y TARGET
+# PASO 3: LAG FEATURES Y TARGET
 # ============================================================
 
-# Features simples (sin lag features por ahora)
-feature_cols = [
-    'origen_id',      # Zona
-    'hora',           # Hora del día
-    'dia_semana',     # Día de la semana (0=Lun, 6=Dom)
-    'mes',            # Mes
-    'dia_mes',        # Día del mes
-    'demanda',        # Demanda actual (como proxy del "último conocido")
-    'temp_c',         # Temperatura
-    'viento_kmh',     # Viento
-    'velocidad_mph',  # Velocidad promedio (proxy tráfico)
-    'lluvia',         # Lluvia (0/1)
-    'nieve',          # Nieve (0/1)
-    'es_festivo',     # Festivo (0/1)
-    'num_eventos',      # Evento (0/1)
-    #'evento_tipo'
+print("\n🔧 Creando lag features y target...")
+
+df_agg = df_agg.sort_values(['origen_id', 'timestamp_hora']).reset_index(drop=True)
+
+# TARGET: demanda en la siguiente hora
+df_agg['target'] = df_agg.groupby('origen_id')['demanda'].shift(-1)
+
+# Lags de demanda (horas anteriores)
+for lag in [1, 2, 3, 6, 12, 24]:
+    df_agg[f'lag_{lag}h'] = df_agg.groupby('origen_id')['demanda'].shift(lag)
+
+# Rolling stats sobre datos pasados (shift(1) para no filtrar el momento actual)
+for window in [3, 24]:
+    df_agg[f'roll_mean_{window}h'] = df_agg.groupby('origen_id')['demanda'].transform(
+        lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+    )
+    df_agg[f'roll_std_{window}h'] = df_agg.groupby('origen_id')['demanda'].transform(
+        lambda x: x.shift(1).rolling(window, min_periods=1).std().fillna(0)
+    )
+
+# Media histórica por (zona, hora, día_semana) — también usada como Baseline 2
+media_global = (
+    df_agg.groupby(['origen_id', 'hora', 'dia_semana'])['demanda']
+    .mean()
+    .reset_index()
+    .rename(columns={'demanda': 'media_hist'})
+)
+df_agg = df_agg.merge(media_global, on=['origen_id', 'hora', 'dia_semana'], how='left')
+
+# Eliminar filas sin target ni lags mínimos necesarios
+df_agg = df_agg.dropna(subset=['target', 'lag_1h', 'lag_2h', 'lag_3h']).reset_index(drop=True)
+
+# Rellenar lags más largos (NaN al inicio de serie de cada zona)
+for col in ['lag_6h', 'lag_12h', 'lag_24h']:
+    df_agg[col] = df_agg[col].fillna(df_agg['media_hist'])
+
+print(f"✅ Dataset final: {len(df_agg):,} registros válidos")
+
+# ============================================================
+# PASO 4: DEFINIR FEATURES
+# ============================================================
+
+FEATURE_COLS = [
+    # Zona
+    'origen_id',
+    # Temporales
+    'hora', 'dia_semana', 'dia_mes', 'mes_num', 'es_finde',
+    # Demanda actual y lags
+    'demanda',
+    'lag_1h', 'lag_2h', 'lag_3h', 'lag_6h', 'lag_12h', 'lag_24h',
+    # Rolling stats
+    'roll_mean_3h', 'roll_std_3h', 'roll_mean_24h', 'roll_std_24h',
+    # Media histórica como feature
+    'media_hist',
+    # Meteorología y contexto
+    'temp_c', 'precipitation', 'viento_kmh', 'velocidad_mph',
+    'lluvia', 'nieve', 'es_festivo', 'num_eventos',
 ]
 
-target_col = 'target_demanda_next'
-
-print(f"\n🎯 Features: {len(feature_cols)}")
-print(f"🎯 Target: {target_col}")
+print(f"\n📋 Features: {len(FEATURE_COLS)}")
 
 # ============================================================
-# PASO 5: TRAIN/VAL/TEST SPLIT TEMPORAL
+# PASO 5: SPLIT TEMPORAL 70 / 15 / 15
 # ============================================================
 
 print("\n📊 Split temporal...")
 
-# Ordenar por tiempo
-df_agg = df_agg.sort_values('timestamp_30min')
-
-# Split temporal (70% train, 15% val, 15% test)
-n = len(df_agg)
+df_agg = df_agg.sort_values('timestamp_hora').reset_index(drop=True)
+n         = len(df_agg)
 train_end = int(n * 0.70)
-val_end = int(n * 0.85)
+val_end   = int(n * 0.85)
 
 df_train = df_agg.iloc[:train_end]
-df_val = df_agg.iloc[train_end:val_end]
-df_test = df_agg.iloc[val_end:]
+df_val   = df_agg.iloc[train_end:val_end]
+df_test  = df_agg.iloc[val_end:]
 
-print(f"   Train: {len(df_train):,} ({len(df_train)/n*100:.1f}%)")
-print(f"   Val:   {len(df_val):,} ({len(df_val)/n*100:.1f}%)")
-print(f"   Test:  {len(df_test):,} ({len(df_test)/n*100:.1f}%)")
+for name, split in [('Train', df_train), ('Val', df_val), ('Test', df_test)]:
+    print(f"   {name}: {len(split):>7,} ({len(split)/n*100:.1f}%) "
+          f"| {split['timestamp_hora'].min()} → {split['timestamp_hora'].max()}")
 
-print(f"\n📅 Períodos:")
-print(f"   Train: {df_train['timestamp_30min'].min()} → {df_train['timestamp_30min'].max()}")
-print(f"   Val:   {df_val['timestamp_30min'].min()} → {df_val['timestamp_30min'].max()}")
-print(f"   Test:  {df_test['timestamp_30min'].min()} → {df_test['timestamp_30min'].max()}")
-
-# Preparar X, y
-X_train = df_train[feature_cols]
-y_train = df_train[target_col]
-
-X_val = df_val[feature_cols]
-y_val = df_val[target_col]
-
-X_test = df_test[feature_cols]
-y_test = df_test[target_col]
+X_train, y_train = df_train[FEATURE_COLS], df_train['target']
+X_val,   y_val   = df_val[FEATURE_COLS],   df_val['target']
+X_test,  y_test  = df_test[FEATURE_COLS],  df_test['target']
 
 # ============================================================
-# PASO 6: BASELINE 1 - PERSISTENCIA (NAIVE)
+# HELPER: MÉTRICAS
 # ============================================================
 
-print(f"\n{'='*60}")
-print(f"BASELINE 1: PERSISTENCIA (Naive)")
-print(f"Asume: demanda_t+1 = demanda_t")
-print(f"{'='*60}")
+def calc_metrics(y_true, y_pred, label=""):
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    mae  = mean_absolute_error(y_true, y_pred)
+    r2   = r2_score(y_true, y_pred)
+    mape = np.mean(np.abs((y_true - y_pred) / np.clip(y_true, 1, None))) * 100
+    if label:
+        print(f"   {label:<8} RMSE={rmse:6.2f}  MAE={mae:6.2f}  R²={r2:6.3f}  MAPE={mape:5.1f}%")
+    return {'rmse': rmse, 'mae': mae, 'r2': r2, 'mape': mape}
 
-# Predicción: siguiente demanda = demanda actual
-y_pred_naive_val = df_val['demanda'].values
-y_pred_naive_test = df_test['demanda'].values
-
-# Métricas
-rmse_naive_val = np.sqrt(mean_squared_error(y_val, y_pred_naive_val))
-mae_naive_val = mean_absolute_error(y_val, y_pred_naive_val)
-r2_naive_val = r2_score(y_val, y_pred_naive_val)
-
-rmse_naive_test = np.sqrt(mean_squared_error(y_test, y_pred_naive_test))
-mae_naive_test = mean_absolute_error(y_test, y_pred_naive_test)
-r2_naive_test = r2_score(y_test, y_pred_naive_test)
-
-print(f"\nValidation:")
-print(f"   RMSE: {rmse_naive_val:.2f} viajes")
-print(f"   MAE:  {mae_naive_val:.2f} viajes")
-print(f"   R²:   {r2_naive_val:.3f}")
-
-print(f"\nTest:")
-print(f"   RMSE: {rmse_naive_test:.2f} viajes")
-print(f"   MAE:  {mae_naive_test:.2f} viajes")
-print(f"   R²:   {r2_naive_test:.3f}")
+results = {}
 
 # ============================================================
-# PASO 7: BASELINE 2 - RANDOM FOREST (SIMPLE)
+# BASELINE 1: PERSISTENCIA NAIVE
+# demanda(t+1) = demanda(t)
 # ============================================================
 
 print(f"\n{'='*60}")
-print(f"BASELINE 2: RANDOM FOREST")
+print("BASELINE 1 — PERSISTENCIA: demanda(t+1) = demanda(t)")
 print(f"{'='*60}")
 
-# Entrenar Random Forest simple
-print("🚀 Entrenando Random Forest...")
+results['Naive'] = {
+    'val':       calc_metrics(y_val,  df_val['demanda'].values,  "Val"),
+    'test':      calc_metrics(y_test, df_test['demanda'].values, "Test"),
+    'pred_test': df_test['demanda'].values,
+}
 
-rf_model = RandomForestRegressor(
-    n_estimators=100,      # 100 árboles
-    max_depth=10,          # Profundidad máxima
-    min_samples_split=20,  # Mínimo para dividir nodo
+# ============================================================
+# BASELINE 2: MEDIA HISTÓRICA (zona × hora × día_semana)
+# ============================================================
+
+print(f"\n{'='*60}")
+print("BASELINE 2 — MEDIA HISTÓRICA (zona × hora × día_semana)")
+print(f"{'='*60}")
+
+# Calculada SOLO sobre train para evitar data leakage
+media_train = (
+    df_train.groupby(['origen_id', 'hora', 'dia_semana'])['target']
+    .mean()
+    .reset_index()
+    .rename(columns={'target': 'pred_media'})
+)
+global_mean_train = float(y_train.mean())
+
+def pred_media_hist(df_split):
+    merged = df_split[['origen_id', 'hora', 'dia_semana']].merge(
+        media_train, on=['origen_id', 'hora', 'dia_semana'], how='left'
+    )
+    return merged['pred_media'].fillna(global_mean_train).values
+
+pred_mh_val  = pred_media_hist(df_val)
+pred_mh_test = pred_media_hist(df_test)
+
+results['Media_hist'] = {
+    'val':       calc_metrics(y_val,  pred_mh_val,  "Val"),
+    'test':      calc_metrics(y_test, pred_mh_test, "Test"),
+    'pred_test': pred_mh_test,
+}
+
+# ============================================================
+# BASELINE 3: RANDOM FOREST
+# ============================================================
+
+print(f"\n{'='*60}")
+print("BASELINE 3 — RANDOM FOREST")
+print(f"{'='*60}")
+
+rf = RandomForestRegressor(
+    n_estimators=200,
+    max_depth=12,
+    min_samples_split=20,
+    min_samples_leaf=10,
+    max_features='sqrt',
     random_state=42,
-    n_jobs=-1,             # Usar todos los cores
-    verbose=0
+    n_jobs=-1,
 )
 
-rf_model.fit(X_train, y_train)
-
+print("🚀 Entrenando...")
+rf.fit(X_train, y_train)
 print("✅ Entrenamiento completado")
 
-# Predecir
-print("🔮 Prediciendo...")
-y_pred_rf_val = rf_model.predict(X_val)
-y_pred_rf_test = rf_model.predict(X_test)
+pred_rf_val  = np.clip(rf.predict(X_val),  0, None)
+pred_rf_test = np.clip(rf.predict(X_test), 0, None)
 
-# Clip negativos (demanda no puede ser negativa)
-y_pred_rf_val = np.clip(y_pred_rf_val, 0, None)
-y_pred_rf_test = np.clip(y_pred_rf_test, 0, None)
-
-# Métricas
-rmse_rf_val = np.sqrt(mean_squared_error(y_val, y_pred_rf_val))
-mae_rf_val = mean_absolute_error(y_val, y_pred_rf_val)
-r2_rf_val = r2_score(y_val, y_pred_rf_val)
-
-rmse_rf_test = np.sqrt(mean_squared_error(y_test, y_pred_rf_test))
-mae_rf_test = mean_absolute_error(y_test, y_pred_rf_test)
-r2_rf_test = r2_score(y_test, y_pred_rf_test)
-
-print(f"\nValidation:")
-print(f"   RMSE: {rmse_rf_val:.2f} viajes (vs {rmse_naive_val:.2f} naive)")
-print(f"   MAE:  {mae_rf_val:.2f} viajes")
-print(f"   R²:   {r2_rf_val:.3f}")
-
-print(f"\nTest:")
-print(f"   RMSE: {rmse_rf_test:.2f} viajes")
-print(f"   MAE:  {mae_rf_test:.2f} viajes")
-print(f"   R²:   {r2_rf_test:.3f}")
-
-# Mejora vs Naive
-mejora = (rmse_naive_test - rmse_rf_test) / rmse_naive_test * 100
-print(f"\n📊 Mejora vs Naive: {mejora:+.1f}%")
+results['RandomForest'] = {
+    'val':       calc_metrics(y_val,  pred_rf_val,  "Val"),
+    'test':      calc_metrics(y_test, pred_rf_test, "Test"),
+    'pred_test': pred_rf_test,
+}
 
 # ============================================================
-# PASO 8: FEATURE IMPORTANCE
+# RESUMEN
 # ============================================================
 
-print(f"\n📊 Feature Importance (Top 10):")
+print(f"\n{'='*60}")
+print("RESUMEN COMPARATIVO — TEST SET")
+print(f"{'='*60}")
+print(f"{'Modelo':<20} {'RMSE':>8} {'MAE':>8} {'R²':>8} {'MAPE':>8}")
+print("-" * 56)
+for name, res in results.items():
+    m = res['test']
+    print(f"{name:<20} {m['rmse']:>8.2f} {m['mae']:>8.2f} {m['r2']:>8.3f} {m['mape']:>7.1f}%")
 
-feature_importance = pd.DataFrame({
-    'feature': feature_cols,
-    'importance': rf_model.feature_importances_
-}).sort_values('importance', ascending=False)
-
-print(feature_importance.head(10).to_string(index=False))
+rf_rmse    = results['RandomForest']['test']['rmse']
+naive_rmse = results['Naive']['test']['rmse']
+mh_rmse    = results['Media_hist']['test']['rmse']
+print(f"\n📈 RF vs Naive:      {(naive_rmse - rf_rmse) / naive_rmse * 100:+.1f}% RMSE")
+print(f"📈 RF vs Media hist: {(mh_rmse    - rf_rmse) / mh_rmse    * 100:+.1f}% RMSE")
 
 # ============================================================
-# PASO 9: VISUALIZACIONES
+# FEATURE IMPORTANCE
 # ============================================================
 
-print(f"\n📊 Generando visualizaciones...")
+print(f"\n📊 Feature Importance — Top 15:")
+fi = (
+    pd.DataFrame({'feature': FEATURE_COLS, 'importance': rf.feature_importances_})
+    .sort_values('importance', ascending=False)
+)
+print(fi.head(15).to_string(index=False))
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+# ============================================================
+# VISUALIZACIONES
+# ============================================================
 
-# 1. Comparación RMSE
-models = ['Naive', 'Random Forest']
-rmse_vals = [rmse_naive_test, rmse_rf_test]
-colors = ['lightcoral', 'lightgreen']
+print("\n📊 Generando visualizaciones...")
 
-axes
+fig = plt.figure(figsize=(16, 12))
+gs  = gridspec.GridSpec(2, 2, figure=fig, hspace=0.38, wspace=0.32)
+
+# 1. Comparativa RMSE / MAE
+ax1 = fig.add_subplot(gs[0, 0])
+model_names = list(results.keys())
+rmse_vals = [results[m]['test']['rmse'] for m in model_names]
+mae_vals  = [results[m]['test']['mae']  for m in model_names]
+x = np.arange(len(model_names))
+w = 0.35
+b1 = ax1.bar(x - w/2, rmse_vals, w, label='RMSE', color=['#e74c3c','#f39c12','#2ecc71'])
+b2 = ax1.bar(x + w/2, mae_vals,  w, label='MAE',  color=['#c0392b','#d68910','#27ae60'])
+ax1.set_xticks(x); ax1.set_xticklabels(model_names, fontsize=9)
+ax1.set_ylabel('Viajes/hora')
+ax1.set_title('Error por modelo — Test Set')
+ax1.legend()
+for bar in list(b1) + list(b2):
+    ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + .1,
+             f'{bar.get_height():.1f}', ha='center', va='bottom', fontsize=8)
+
+# 2. R² por modelo
+ax2 = fig.add_subplot(gs[0, 1])
+r2_vals = [results[m]['test']['r2'] for m in model_names]
+colors  = ['#2ecc71' if v > 0.7 else '#f39c12' if v > 0 else '#e74c3c' for v in r2_vals]
+bars = ax2.bar(model_names, r2_vals, color=colors, edgecolor='white', width=0.5)
+ax2.axhline(0, color='gray', linestyle='--', linewidth=0.8)
+ax2.set_ylabel('R²')
+ax2.set_title('R² — Test Set')
+ax2.set_ylim(min(min(r2_vals) - 0.1, -0.05), 1.05)
+for bar, v in zip(bars, r2_vals):
+    ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+             f'{v:.3f}', ha='center', va='bottom', fontsize=9)
+
+# 3. Predicho vs Real en zona más activa (200 timesteps)
+ax3 = fig.add_subplot(gs[1, 0])
+top_zone  = df_test.groupby('origen_id')['target'].sum().idxmax()
+mask      = (df_test['origen_id'] == top_zone).values
+sample    = min(200, mask.sum())
+y_real    = y_test.values[mask][:sample]
+y_rf      = pred_rf_test[mask][:sample]
+y_naive   = df_test['demanda'].values[mask][:sample]
+y_mh      = pred_mh_test[mask][:sample]
+ax3.plot(y_real,  label='Real',       color='#2c3e50', lw=1.8)
+ax3.plot(y_rf,    label='RF',         color='#2ecc71', lw=1.2, alpha=0.9)
+ax3.plot(y_mh,    label='Media hist', color='#f39c12', lw=1.0, alpha=0.8, linestyle='-.')
+ax3.plot(y_naive, label='Naive',      color='#e74c3c', lw=0.8, alpha=0.6, linestyle='--')
+ax3.set_xlabel('Timesteps (horas)')
+ax3.set_ylabel('Viajes/hora')
+ax3.set_title(f'Predicho vs Real — Zona {top_zone}')
+ax3.legend(fontsize=8)
+
+# 4. Feature Importance top 12
+ax4 = fig.add_subplot(gs[1, 1])
+fi_top = fi.head(12)
+ax4.barh(fi_top['feature'].iloc[::-1], fi_top['importance'].iloc[::-1], color='#3498db')
+ax4.set_xlabel('Importancia')
+ax4.set_title('Feature Importance — Top 12')
+ax4.tick_params(axis='y', labelsize=8)
+
+plt.suptitle('ConducIA — Baseline Predicción de Demanda (Problema 1)',
+             fontsize=13, fontweight='bold', y=1.01)
+plt.savefig('data/outputs/baseline_resultados.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("✅ Figura guardada en data/outputs/baseline_resultados.png")
+
+# ============================================================
+# GUARDAR MODELO Y PREDICCIONES
+# ============================================================
+
+joblib.dump(rf, 'models/problema1/baseline_rf.pkl')
+print("✅ Modelo guardado en models/problema1/baseline_rf.pkl")
+
+df_preds = df_test[['origen_id', 'timestamp_hora', 'hora', 'dia_semana', 'target']].copy()
+df_preds['pred_naive']    = df_test['demanda'].values
+df_preds['pred_media']    = pred_mh_test
+df_preds['pred_rf']       = pred_rf_test
+df_preds['error_rf']      = df_preds['target'] - df_preds['pred_rf']
+df_preds.to_parquet('data/outputs/baseline_predicciones_test.parquet', index=False)
+print("✅ Predicciones guardadas en data/outputs/baseline_predicciones_test.parquet")
+
+print(f"\n🎯 BASELINE COMPLETADO")
+print(f"   Referencia a superar con LSTM/Transformer:")
+print(f"   → RMSE: {rf_rmse:.2f} viajes/hora")
+print(f"   → R²:   {results['RandomForest']['test']['r2']:.3f}")
