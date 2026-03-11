@@ -3,19 +3,14 @@ DESCRIPCIÓN:
     Este script es el núcleo de preparación de datos para el Problema 4 (Tráfico y Clima).
     Transforma el archivo 'datos_final.parquet' en conjuntos de entrenamiento y prueba.
 
-FLUJO DE TRABAJO QUE REALIZA ESTE SCRIPT:
+FLUJO DE TRABAJO:
     1. CARGA CRONOLÓGICA: Lectura del Parquet (Dic 2024 - Nov 2025).
     2. FILTRADO DE CALIDAD: Eliminación de ruidos (velocidades < 2mph o > 85mph).
     3. TRATAMIENTO DE CLIMA: Imputación de nulos y creación de indicadores (Flags)
-       de lluvia y nieve para facilitar el aprendizaje de los modelos.
-    4. SELECCIÓN DE FEATURES: Limpieza de variables "post-viaje" (propinas, precios)
-       y mantenimiento de variables cíclicas (Sen/Cos) y espaciales (IDs).
-    5. SPLIT TEMPORAL: División estricta por meses:
-       - Entrenamiento (Train): Diciembre 2024 hasta Septiembre 2025.
-       - Evaluación (Test): Octubre y Noviembre 2025.
-
-NOTAS:
-    - Este archivo garantiza que todos los modelos compitan bajo las mismas condiciones.
+       de lluvia y nieve.
+    4. SELECCIÓN DE FEATURES: Mantenimiento de variables espaciales (IDs), climáticas,
+       eventos y cíclicas, descartando solo variables económicas y post-viaje.
+    5. SPLIT TEMPORAL: Train (Dic 2024 - Sep 2025) y Test (Oct - Nov 2025).
 """
 
 import pandas as pd
@@ -24,7 +19,6 @@ import os
 from pathlib import Path
 
 # --- CONFIGURACIÓN DE RUTAS ---
-# Buscamos la raíz del proyecto (PD2-conducIA) subiendo 3 niveles desde este script
 BASE_DIR = Path(__file__).resolve().parents[3]
 PARQUET_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'datos_final.parquet')
 
@@ -39,34 +33,43 @@ def flujo_preprocesamiento_base():
     df = pd.read_parquet(PARQUET_PATH)
     
     # 2. LIMPIEZA DE CALIDAD (Outliers de Velocidad)
-    # Filtramos velocidades extremas que suelen ser errores de GPS o atascos estáticos.
-    # El rango 2-85 mph es el estándar para tráfico urbano real en NY.
-    print("2. Filtrando ruido y velocidades imposibles...")
+    print("2. Filtrando ruido y velocidades imposibles (2-85 mph)...")
     df = df[(df['velocidad_mph'] >= 2) & (df['velocidad_mph'] <= 85)].copy()
     
     # 3. TRATAMIENTO ATMOSFÉRICO (Core del Problema 4)
     print("3. Estandarizando variables climáticas...")
-    # Rellenamos nulos en clima con 0 (asumimos que no hubo precipitación si no hay registro)
-    cols_clima = ['lluvia', 'nieve', 'precipitation', 'temp_c', 'viento_kmh']
+    # Rellenamos nulos en clima con 0 (asumimos ausencia de fenómeno si no hay registro)
+    cols_clima = ['temp_c', 'precipitation', 'viento_kmh', 'lluvia', 'nieve']
     df[cols_clima] = df[cols_clima].fillna(0)
     
-    # Creamos 'Flags' binarios. A veces al tráfico le afecta el 'hecho de que llueva'
-    # más que los milímetros exactos. Esto ayuda mucho al Baseline y a la Red Neuronal.
+    # Creamos 'Flags' binarios para capturar el impacto visual/físico del clima
     df['hay_lluvia'] = (df['lluvia'] > 0).astype(int)
     df['hay_nieve'] = (df['nieve'] > 0).astype(int)
 
-    # 4. SELECCIÓN DE VARIABLES (Features)
+    # 4. SELECCIÓN DE VARIABLES (Features finales acordadas)
     print("4. Seleccionando columnas útiles para los modelos...")
-    # Mantenemos: IDs (para ST-GCN), Clima (Problema 4) y Cíclicas (Red Neuronal)
-    # Eliminamos: propinas, precios y esperas (son datos que no se saben al inicio del viaje)
+    # Hemos incluido origen/destino para Grafos (ST-GCN) y eventos para el tráfico
     features_modelo = [
-        'fecha_inicio', 'origen_id', 'destino_id', 'velocidad_mph', 
-        'tipo_vehiculo', 'temp_c', 'lluvia', 'nieve', 'hay_lluvia', 
-        'hay_nieve', 'viento_kmh', 'es_festivo', 'num_eventos', 
-        'mes_num', 'hora', 'dia_semana', 'es_fin_semana', 
-        'franja_horaria', 'hora_sen', 'hora_cos'
+        # Identificadores Temporales y Espaciales
+        'fecha_inicio', 'origen_id', 'destino_id', 
+        
+        # Objetivo (Target)
+        'velocidad_mph', 
+        
+        # Clima (Problema 4)
+        'temp_c', 'precipitation', 'viento_kmh', 'lluvia', 'nieve', 'hay_lluvia', 'hay_nieve',
+        
+        # Calendario y Eventos
+        'es_festivo', 'num_eventos', 'mes_num', 'dia_semana', 'es_fin_semana',
+        
+        # Variables de tiempo cíclico
+        'hora_sen', 'hora_cos',
+        
+        # Categorías (serán procesadas en cada modelo)
+        'tipo_vehiculo', 'franja_horaria'
     ]
     
+    # Filtramos el DF solo con estas columnas
     df = df[features_modelo].copy()
     
     print(f"   > Preprocesamiento base listo. Registros: {len(df):,}")
@@ -78,9 +81,9 @@ def realizar_split_temporal(df):
     Train: Mes 12 (Dic 2024) + Meses 1 al 9 (2025).
     Test: Meses 10 y 11 (Octubre y Noviembre 2025).
     """
-    print("5. Realizando split temporal (Train: Pasado -> Sep | Test: Oct-Nov)...")
+    print("5. Realizando split temporal (Train: Dic -> Sep | Test: Oct-Nov)...")
     
-    # Definimos los meses finales como nuestro conjunto de evaluación (futuro)
+    # Octubre y Noviembre son los meses más "futuros" de nuestro dataset
     meses_test = [10, 11]
     
     df_train = df[~df['mes_num'].isin(meses_test)].copy()
@@ -93,8 +96,9 @@ def realizar_split_temporal(df):
 
 if __name__ == "__main__":
     # --- PRUEBA DE EJECUCIÓN ---
-    # Este bloque solo se ejecuta si lanzas el script directamente.
-    datos_base = flujo_preprocesamiento_base()
-    train_set, test_set = realizar_split_temporal(datos_base)
-    
-    print("\n[ÉXITO] Preprocesamiento base finalizado correctamente.")
+    try:
+        datos_base = flujo_preprocesamiento_base()
+        train_set, test_set = realizar_split_temporal(datos_base)
+        print("\n[ÉXITO] Preprocesamiento base finalizado correctamente.")
+    except Exception as e:
+        print(f"\n[ERROR] Ocurrió un problema: {e}")
