@@ -29,7 +29,7 @@ os.makedirs('models/problema1', exist_ok=True)
 print("📊 Cargando datos...")
 
 # 'data/datos_reducidos.parquet' para pruebas, 'data/datos_final.parquet' para producción
-df = pd.read_parquet('data/datos_final.parquet')
+df = pd.read_parquet('data/processed/tlc_clean/datos_final.parquet')
 
 print(f"✅ {len(df):,} viajes cargados")
 
