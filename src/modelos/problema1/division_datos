@@ -1,0 +1,240 @@
+# ============================================================
+# PREPARAR DATOS — PROBLEMA 1
+# ============================================================
+# Ejecutar UNA SOLA VEZ antes de cualquier modelo.
+# El split es TEMPORAL: se calculan fechas de corte sobre el
+# rango real del dataset para hacer 70% / 15% / 15%.
+# Todas las zonas comparten los mismos cortes temporales,
+# garantizando que train siempre precede a val y val a test.
+#
+# Salida en data/processed/problema1/:
+#   - train.parquet
+#   - val.parquet
+#   - test.parquet
+#   - metadata.json
+# ============================================================
+
+import pandas as pd
+import numpy as np
+import json
+import os
+
+os.makedirs('data/processed/tlc_clean/problema1', exist_ok=True)
+
+# ============================================================
+# PASO 1: CARGAR DATOS
+# ============================================================
+
+print("📊 Cargando datos...")
+
+# Cambia a datos_reducidos.parquet para pruebas rápidas
+df = pd.read_parquet('data/processed/tlc_clean/datos_final.parquet')
+
+print(f"✅ {len(df):,} viajes cargados")
+
+df['fecha_inicio'] = pd.to_datetime(df['fecha_inicio'])
+print(f"📅 Período raw: {df['fecha_inicio'].min()} → {df['fecha_inicio'].max()}")
+
+# ============================================================
+# PASO 2: AGREGAR DEMANDA POR ZONA ORIGEN Y HORA
+# ============================================================
+
+print("\n🔄 Agregando demanda por zona y hora...")
+
+df['timestamp_hora'] = df['fecha_inicio'].dt.floor('1h')
+df['hora']           = df['fecha_inicio'].dt.hour
+df['dia_semana']     = df['fecha_inicio'].dt.dayofweek  # 0=Lun, 6=Dom
+df['dia_mes']        = df['fecha_inicio'].dt.day
+df['es_finde']       = (df['dia_semana'] >= 5).astype(int)
+
+df_agg = (
+    df.groupby(['origen_id', 'timestamp_hora'])
+    .agg(
+        demanda        = ('fecha_inicio',  'count'),
+        hora           = ('hora',          'first'),
+        dia_semana     = ('dia_semana',    'first'),
+        dia_mes        = ('dia_mes',       'first'),
+        mes_num        = ('mes_num',       'first'),
+        es_finde       = ('es_finde',      'first'),
+        temp_c         = ('temp_c',        'mean'),
+        precipitation  = ('precipitation', 'mean'),
+        viento_kmh     = ('viento_kmh',    'mean'),
+        velocidad_mph  = ('velocidad_mph', 'mean'),
+        lluvia         = ('lluvia',        'max'),
+        nieve          = ('nieve',         'max'),
+        es_festivo     = ('es_festivo',    'max'),
+        num_eventos    = ('num_eventos',   'mean'),
+    )
+    .reset_index()
+)
+
+print(f"✅ Registros agregados: {len(df_agg):,}")
+print(f"   Zonas únicas:        {df_agg['origen_id'].nunique()}")
+print(f"   Demanda media:       {df_agg['demanda'].mean():.1f} viajes/hora")
+print(f"   Demanda máx:         {df_agg['demanda'].max():.0f} viajes/hora")
+
+# ============================================================
+# PASO 3: LAG FEATURES Y TARGET
+# ============================================================
+
+print("\n🔧 Creando lag features y target...")
+
+df_agg = df_agg.sort_values(['origen_id', 'timestamp_hora']).reset_index(drop=True)
+
+# TARGET: demanda en la siguiente hora
+df_agg['target'] = df_agg.groupby('origen_id')['demanda'].shift(-1)
+
+# Lags de demanda
+for lag in [1, 2, 3, 6, 12, 24]:
+    df_agg[f'lag_{lag}h'] = df_agg.groupby('origen_id')['demanda'].shift(lag)
+
+# Rolling stats
+for window in [3, 24]:
+    df_agg[f'roll_mean_{window}h'] = df_agg.groupby('origen_id')['demanda'].transform(
+        lambda x: x.shift(1).rolling(window, min_periods=1).mean()
+    )
+    df_agg[f'roll_std_{window}h'] = df_agg.groupby('origen_id')['demanda'].transform(
+        lambda x: x.shift(1).rolling(window, min_periods=1).std().fillna(0)
+    )
+
+# Media histórica por (zona, hora, día_semana)
+media_global = (
+    df_agg.groupby(['origen_id', 'hora', 'dia_semana'])['demanda']
+    .mean()
+    .reset_index()
+    .rename(columns={'demanda': 'media_hist'})
+)
+df_agg = df_agg.merge(media_global, on=['origen_id', 'hora', 'dia_semana'], how='left')
+
+# Eliminar filas sin target ni lags mínimos
+df_agg = df_agg.dropna(subset=['target', 'lag_1h', 'lag_2h', 'lag_3h']).reset_index(drop=True)
+
+# Rellenar lags largos con media histórica
+for col in ['lag_6h', 'lag_12h', 'lag_24h']:
+    df_agg[col] = df_agg[col].fillna(df_agg['media_hist'])
+
+print(f"✅ Dataset final: {len(df_agg):,} registros válidos")
+
+# ============================================================
+# PASO 4: SPLIT TEMPORAL POR FECHA DE CORTE (70 / 15 / 15)
+# ============================================================
+# Se calculan dos fechas de corte sobre el rango temporal
+# real del dataset. Todas las zonas comparten los mismos
+# cortes: cualquier hora anterior a corte_1 es train,
+# entre corte_1 y corte_2 es val, posterior a corte_2 es test.
+# Así nunca hay datos futuros mezclados con pasados.
+# ============================================================
+
+print("\n📊 Calculando fechas de corte temporales (70 / 15 / 15)...")
+
+t_min = df_agg['timestamp_hora'].min()
+t_max = df_agg['timestamp_hora'].max()
+rango_total = t_max - t_min
+
+corte_train = t_min + rango_total * 0.70
+corte_val   = t_min + rango_total * 0.85
+
+# Redondear a hora completa
+corte_train = corte_train.floor('1h')
+corte_val   = corte_val.floor('1h')
+
+print(f"   Rango total:  {t_min} → {t_max}")
+print(f"   Corte train:  {corte_train}  (70%)")
+print(f"   Corte val:    {corte_val}  (85%)")
+
+df_train = df_agg[df_agg['timestamp_hora'] <  corte_train].copy()
+df_val   = df_agg[(df_agg['timestamp_hora'] >= corte_train) &
+                  (df_agg['timestamp_hora'] <  corte_val)].copy()
+df_test  = df_agg[df_agg['timestamp_hora'] >= corte_val].copy()
+
+n = len(df_agg)
+for name, split in [('Train', df_train), ('Val', df_val), ('Test', df_test)]:
+    print(f"   {name}: {len(split):>8,} filas ({len(split)/n*100:.1f}%) "
+          f"| {split['timestamp_hora'].min()} → {split['timestamp_hora'].max()}")
+
+# Verificación: no debe haber solapamiento
+assert df_train['timestamp_hora'].max() < df_val['timestamp_hora'].min(), \
+    "❌ Solapamiento entre train y val"
+assert df_val['timestamp_hora'].max() < df_test['timestamp_hora'].min(), \
+    "❌ Solapamiento entre val y test"
+print("✅ Sin solapamiento temporal entre splits")
+
+# ============================================================
+# PASO 5: GUARDAR SPLITS
+# ============================================================
+
+print("\n💾 Guardando splits...")
+
+df_train.to_parquet('data/processed/tlc_clean/problema1/train.parquet', index=False)
+df_val.to_parquet(  'data/processed/tlc_clean/problema1/val.parquet',   index=False)
+df_test.to_parquet( 'data/processed/tlc_clean/problema1/test.parquet',  index=False)
+
+print("   ✅ train.parquet")
+print("   ✅ val.parquet")
+print("   ✅ test.parquet")
+
+# ============================================================
+# PASO 6: GUARDAR METADATA
+# ============================================================
+
+feature_cols = [
+    'origen_id',
+    'hora', 'dia_semana', 'dia_mes', 'mes_num', 'es_finde',
+    'demanda',
+    'lag_1h', 'lag_2h', 'lag_3h', 'lag_6h', 'lag_12h', 'lag_24h',
+    'roll_mean_3h', 'roll_std_3h', 'roll_mean_24h', 'roll_std_24h',
+    'media_hist',
+    'temp_c', 'precipitation', 'viento_kmh', 'velocidad_mph',
+    'lluvia', 'nieve', 'es_festivo', 'num_eventos',
+]
+
+metadata = {
+    'descripcion': 'Split temporal para Problema 1 - Predicción de demanda por zona',
+    'tipo_split': 'temporal_por_fecha_de_corte',
+    'target': 'target',
+    'feature_cols': feature_cols,
+    'num_zonas': int(df_agg['origen_id'].nunique()),
+    'zonas': sorted(df_agg['origen_id'].unique().tolist()),
+    'cortes': {
+        'corte_train': str(corte_train),
+        'corte_val':   str(corte_val),
+    },
+    'split': {
+        'train': {
+            'filas':        len(df_train),
+            'pct':          round(len(df_train) / n * 100, 1),
+            'fecha_inicio': str(df_train['timestamp_hora'].min()),
+            'fecha_fin':    str(df_train['timestamp_hora'].max()),
+        },
+        'val': {
+            'filas':        len(df_val),
+            'pct':          round(len(df_val) / n * 100, 1),
+            'fecha_inicio': str(df_val['timestamp_hora'].min()),
+            'fecha_fin':    str(df_val['timestamp_hora'].max()),
+        },
+        'test': {
+            'filas':        len(df_test),
+            'pct':          round(len(df_test) / n * 100, 1),
+            'fecha_inicio': str(df_test['timestamp_hora'].min()),
+            'fecha_fin':    str(df_test['timestamp_hora'].max()),
+        },
+    },
+    'demanda_stats': {
+        'media':  round(float(df_agg['demanda'].mean()), 2),
+        'std':    round(float(df_agg['demanda'].std()),  2),
+        'min':    int(df_agg['demanda'].min()),
+        'max':    int(df_agg['demanda'].max()),
+        'median': round(float(df_agg['demanda'].median()), 2),
+    },
+}
+
+with open('data/processed/tlc_clean/problema1/metadata.json', 'w') as f:
+    json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+print("   ✅ metadata.json")
+
+print(f"\n🎯 DATOS LISTOS en data/processed/tlc_clean/problema1/")
+print(f"   Usar en cada modelo:")
+print(f"   df_train = pd.read_parquet('data/processed/tlc_clean/problema1/train.parquet')")
+print(f"   df_val   = pd.read_parquet('data/processed/tlc_clean/problema1/val.parquet')")
+print(f"   df_test  = pd.read_parquet('data/processed/tlc_clean/problema1/test.parquet')")
