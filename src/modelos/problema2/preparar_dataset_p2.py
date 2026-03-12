@@ -14,7 +14,7 @@ import glob
 
 def preparar_datos():
     input_path = 'data/processed/tlc_clean/datos_final.parquet'
-    output_dir = 'data/processed/problema2'
+    output_dir = 'data/processed/tlc_clean/problema2'
     output_path = os.path.join(output_dir, 'dataset_p2.parquet')
     
     os.makedirs(output_dir, exist_ok=True)
