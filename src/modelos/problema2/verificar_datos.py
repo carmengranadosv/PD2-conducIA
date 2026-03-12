@@ -8,7 +8,7 @@ import pyarrow.parquet as pq
 import os
 
 def verificar_dataset_ligero():
-    path = 'data/processed/problema2/dataset_p2.parquet'
+    path = 'data/processed/tlc_clean/problema2/dataset_p2.parquet'
     
     if not os.path.exists(path):
         print(f"❌ Error: No se encuentra el archivo en {path}")
