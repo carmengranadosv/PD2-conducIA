@@ -1,118 +1,155 @@
-# ============================================================
-# PREPARAR DATOS — PROBLEMA 1
-# ============================================================
-# Responsabilidad: dividir el parquet raw en train/val/test
-# usando cortes temporales. Sin ninguna transformación.
-#
-# Ejecutar UNA SOLA VEZ. Todos los modelos del Problema 1
-# parten de estos mismos splits.
-#
-# Entrada:  data/processed/tlc_clean/datos_final.parquet
-# Salida:   data/processed/tlc_clean/problema1/raw/
-#               train.parquet
-#               val.parquet
-#               test.parquet
-#               metadata.json
-# ============================================================
-
-import pandas as pd
-import json
 import os
+import json
+import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
-os.makedirs('data/processed/tlc_clean/problema1/raw', exist_ok=True)
+OUT = "data/processed/tlc_clean/problema1/raw"
+PARQUET_PATH = "data/processed/tlc_clean/datos_final.parquet"
 
-# ============================================================
-# PASO 1: CARGAR DATOS
-# ============================================================
+os.makedirs(OUT, exist_ok=True)
 
-print("📊 Cargando datos...")
+print("📊 Abriendo dataset con PyArrow...")
+dataset = ds.dataset(PARQUET_PATH, format="parquet")
 
-# Cambia a datos_reducidos.parquet para pruebas rápidas
-df = pd.read_parquet('data/processed/tlc_clean/datos_final.parquet')
+print("📅 Calculando rango temporal...")
 
-df['fecha_inicio'] = pd.to_datetime(df['fecha_inicio'])
+scanner = dataset.scanner(columns=["fecha_inicio"])
+reader = scanner.to_reader()
 
-print(f"✅ {len(df):,} viajes cargados")
-print(f"📅 Período: {df['fecha_inicio'].min()} → {df['fecha_inicio'].max()}")
+t_min = None
+t_max = None
+n_total = 0
 
-# ============================================================
-# PASO 2: SPLIT TEMPORAL POR FECHA DE CORTE (70 / 15 / 15)
-# ============================================================
+for batch in reader:
+    col = batch.column("fecha_inicio")
+    n_total += batch.num_rows
 
-print("\n📊 Calculando fechas de corte (70 / 15 / 15)...")
+    bmin = pc.min(col).as_py()
+    bmax = pc.max(col).as_py()
 
-t_min       = df['fecha_inicio'].min()
-t_max       = df['fecha_inicio'].max()
+    if bmin is not None:
+        bmin = pd.Timestamp(bmin)
+        t_min = bmin if t_min is None or bmin < t_min else t_min
+
+    if bmax is not None:
+        bmax = pd.Timestamp(bmax)
+        t_max = bmax if t_max is None or bmax > t_max else t_max
+
+if t_min is None or t_max is None:
+    raise ValueError("❌ No se pudo calcular el rango temporal")
+
+print(f"✅ {n_total:,} viajes detectados")
+print(f"📅 Período: {t_min} → {t_max}")
+
 rango_total = t_max - t_min
+corte_train = (t_min + rango_total * 0.70).floor("1h")
+corte_val   = (t_min + rango_total * 0.85).floor("1h")
 
-corte_train = (t_min + rango_total * 0.70).floor('1h')
-corte_val   = (t_min + rango_total * 0.85).floor('1h')
+print(f"   Corte train: {corte_train}")
+print(f"   Corte val:   {corte_val}")
 
-print(f"   Rango total: {t_min} → {t_max}")
-print(f"   Corte train: {corte_train}  (70%)")
-print(f"   Corte val:   {corte_val}  (85%)")
+fecha_field = ds.field("fecha_inicio")
 
-df_train = df[df['fecha_inicio'] <  corte_train].copy()
-df_val   = df[(df['fecha_inicio'] >= corte_train) &
-              (df['fecha_inicio'] <  corte_val)].copy()
-df_test  = df[df['fecha_inicio'] >= corte_val].copy()
+filtros = {
+    "train": fecha_field < pa.scalar(corte_train.to_pydatetime()),
+    "val": (
+        (fecha_field >= pa.scalar(corte_train.to_pydatetime())) &
+        (fecha_field <  pa.scalar(corte_val.to_pydatetime()))
+    ),
+    "test": fecha_field >= pa.scalar(corte_val.to_pydatetime()),
+}
 
-n = len(df)
-for name, split in [('Train', df_train), ('Val', df_val), ('Test', df_test)]:
-    print(f"   {name}: {len(split):>10,} filas ({len(split)/n*100:.1f}%) "
-          f"| {split['fecha_inicio'].min()} → {split['fecha_inicio'].max()}")
+def escribir_split_unico(nombre, filtro):
+    salida = f"{OUT}/{nombre}.parquet"
+    scanner = dataset.scanner(filter=filtro)
 
-# Verificación de no solapamiento
-assert df_train['fecha_inicio'].max() < df_val['fecha_inicio'].min(), \
-    "❌ Solapamiento entre train y val"
-assert df_val['fecha_inicio'].max() < df_test['fecha_inicio'].min(), \
-    "❌ Solapamiento entre val y test"
-print("✅ Sin solapamiento temporal entre splits")
+    writer = None
+    total = 0
+    f_min = None
+    f_max = None
 
-# ============================================================
-# PASO 3: GUARDAR
-# ============================================================
+    for batch in scanner.to_reader():
+        if writer is None:
+            writer = pq.ParquetWriter(salida, batch.schema)
 
-print("\n💾 Guardando...")
+        writer.write_batch(batch)
+        total += batch.num_rows
 
-OUT = 'data/processed/tlc_clean/problema1/raw'
+        col = batch.column(batch.schema.get_field_index("fecha_inicio"))
+        bmin = pc.min(col).as_py()
+        bmax = pc.max(col).as_py()
 
-df_train.to_parquet(f'{OUT}/train.parquet', index=False)
-df_val.to_parquet(  f'{OUT}/val.parquet',   index=False)
-df_test.to_parquet( f'{OUT}/test.parquet',  index=False)
+        if bmin is not None:
+            bmin = pd.Timestamp(bmin)
+            f_min = bmin if f_min is None or bmin < f_min else f_min
+
+        if bmax is not None:
+            bmax = pd.Timestamp(bmax)
+            f_max = bmax if f_max is None or bmax > f_max else f_max
+
+    if writer is not None:
+        writer.close()
+    else:
+        # Crear parquet vacío si no hay filas
+        tabla_vacia = pa.Table.from_arrays([], names=[])
+        pq.write_table(tabla_vacia, salida)
+
+    return {
+        "filas": total,
+        "fecha_inicio": str(f_min) if f_min is not None else None,
+        "fecha_fin": str(f_max) if f_max is not None else None,
+    }
+
+print("\n💾 Guardando splits...")
+train_stats = escribir_split_unico("train", filtros["train"])
+val_stats   = escribir_split_unico("val", filtros["val"])
+test_stats  = escribir_split_unico("test", filtros["test"])
+
+train_max = pd.Timestamp(train_stats["fecha_fin"]) if train_stats["fecha_fin"] else None
+val_min   = pd.Timestamp(val_stats["fecha_inicio"]) if val_stats["fecha_inicio"] else None
+val_max   = pd.Timestamp(val_stats["fecha_fin"]) if val_stats["fecha_fin"] else None
+test_min  = pd.Timestamp(test_stats["fecha_inicio"]) if test_stats["fecha_inicio"] else None
+
+if train_max is not None and val_min is not None:
+    assert train_max < val_min, "❌ Solapamiento entre train y val"
+if val_max is not None and test_min is not None:
+    assert val_max < test_min, "❌ Solapamiento entre val y test"
 
 metadata = {
-    'cortes': {
-        'corte_train': str(corte_train),
-        'corte_val':   str(corte_val),
+    "cortes": {
+        "corte_train": str(corte_train),
+        "corte_val": str(corte_val),
     },
-    'split': {
-        'train': {
-            'filas':        len(df_train),
-            'pct':          round(len(df_train) / n * 100, 1),
-            'fecha_inicio': str(df_train['fecha_inicio'].min()),
-            'fecha_fin':    str(df_train['fecha_inicio'].max()),
+    "split": {
+        "train": {
+            "filas": train_stats["filas"],
+            "pct": round(train_stats["filas"] / n_total * 100, 1) if n_total else 0.0,
+            "fecha_inicio": train_stats["fecha_inicio"],
+            "fecha_fin": train_stats["fecha_fin"],
         },
-        'val': {
-            'filas':        len(df_val),
-            'pct':          round(len(df_val) / n * 100, 1),
-            'fecha_inicio': str(df_val['fecha_inicio'].min()),
-            'fecha_fin':    str(df_val['fecha_inicio'].max()),
+        "val": {
+            "filas": val_stats["filas"],
+            "pct": round(val_stats["filas"] / n_total * 100, 1) if n_total else 0.0,
+            "fecha_inicio": val_stats["fecha_inicio"],
+            "fecha_fin": val_stats["fecha_fin"],
         },
-        'test': {
-            'filas':        len(df_test),
-            'pct':          round(len(df_test) / n * 100, 1),
-            'fecha_inicio': str(df_test['fecha_inicio'].min()),
-            'fecha_fin':    str(df_test['fecha_inicio'].max()),
+        "test": {
+            "filas": test_stats["filas"],
+            "pct": round(test_stats["filas"] / n_total * 100, 1) if n_total else 0.0,
+            "fecha_inicio": test_stats["fecha_inicio"],
+            "fecha_fin": test_stats["fecha_fin"],
         },
     },
 }
 
-with open(f'{OUT}/metadata.json', 'w') as f:
+with open(f"{OUT}/metadata.json", "w", encoding="utf-8") as f:
     json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-print(f"   ✅ train.parquet  ({len(df_train):,} filas)")
-print(f"   ✅ val.parquet    ({len(df_val):,} filas)")
-print(f"   ✅ test.parquet   ({len(df_test):,} filas)")
-print(f"   ✅ metadata.json")
-print(f"\n🎯 Siguiente paso: ejecutar agregacion.py")
+print(f"   ✅ train.parquet  ({train_stats['filas']:,} filas)")
+print(f"   ✅ val.parquet    ({val_stats['filas']:,} filas)")
+print(f"   ✅ test.parquet   ({test_stats['filas']:,} filas)")
+print("   ✅ metadata.json")
+print("\n🎯 Siguiente paso: ejecutar agregacion.py")
