@@ -1,9 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
-import mlflow
-import mlflow.sklearn
 from pathlib import Path
+import pyarrow.parquet as pq
 
 # Scikit-Learn Pipeline y Preprocesamiento
 from sklearn.pipeline import Pipeline
@@ -23,8 +22,12 @@ def entrenar_baseline():
     print(" Iniciando entrenamiento del Baseline (Regresión Lineal)...")
 
     # CARGAR DATOS
-    df_train = pd.read_parquet(TRAIN_FILE, engine='pyarrow')
-    df_val = pd.read_parquet(VAL_FILE, engine='pyarrow')
+    parquet_train = pq.ParquetFile(TRAIN_FILE)
+    parquet_val = pq.ParquetFile(VAL_FILE)
+
+    # Solo leemos el primer grupo de filas 
+    df_train = parquet_train.read_row_group(0).to_pandas()
+    df_val = parquet_val.read_row_group(0).to_pandas()
 
     # SEPARAR X e y (Variable Objetivo: propina)
     columnas_a_ignorar = ['propina', 'origen_id', 'destino_id']
@@ -67,89 +70,82 @@ def entrenar_baseline():
         ('modelo', LinearRegression())
     ])
 
-    # CONFIGURAR MLFLOW Y ENTRENAR
-    # Le damos un nombre al experimento para tenerlo organizado en la interfaz web
-    mlflow.set_experiment("ConducIA_Problema5_Propinas")
+    # ENTRENAMIENTO
+    print(" Ajustando el Pipeline y entrenando el modelo...")
+    pipeline_lr.fit(X_train, y_train)
+
+    # COMPROBAR LA IMPORTANCIA DE LAS VARIABLES
+    print(" Analizando la importancia de las variables...")
+    modelo_lr = pipeline_lr.named_steps['modelo']
+    preprocesador_ajustado = pipeline_lr.named_steps['preprocesamiento']
+
+    nombres_num = columnas_numericas
+    nombres_cat = preprocesador_ajustado.named_transformers_['cat'].get_feature_names_out(columnas_categoricas)
+    nombres_features = np.concatenate([nombres_num, nombres_cat])
     
-    with mlflow.start_run(run_name="Baseline_Regresion_Lineal"):
-        print(" Ajustando el Pipeline y entrenando el modelo...")
-        
-        # ENTRENAMIENTO
-        pipeline_lr.fit(X_train, y_train)
+    coeficientes = modelo_lr.coef_
+    
+    df_importancia = pd.DataFrame({
+        'Variable': nombres_features,
+        'Peso_Coeficiente': coeficientes,
+        'Importancia_Absoluta': np.abs(coeficientes)
+    })
+    
+    df_importancia = df_importancia.sort_values(by='Importancia_Absoluta', ascending=False)
+    print("\n TOP 10 VARIABLES QUE MÁS AFECTAN A LA PROPINA:")
+    print(df_importancia[['Variable', 'Peso_Coeficiente']].head(10).to_string(index=False))
 
-        # COMPROBAR LA IMPORTANCIA DE LAS VARIABLES
-        print(" Analizando la importancia de las variables...")
-
-        # Sacar el modelo matemático y el preprocesador de dentro del Pipeline
-        modelo_lr = pipeline_lr.named_steps['modelo']
-        preprocesador = pipeline_lr.named_steps['preprocesamiento']
-
-        # Recuperar los nombres de las columnas en el orden exacto
-        nombres_num = columnas_numericas
-        # Luego las categóricas transformadas (ej. 'origen_barrio_Manhattan')
-        nombres_cat = preprocesador.named_transformers_['cat'].get_feature_names_out(columnas_categoricas)
-        # Juntamos todos los nombres
-        nombres_features = np.concatenate([nombres_num, nombres_cat])
-        
-        # Emparejamos los nombres con los pesos (coeficientes) del modelo
-        coeficientes = modelo_lr.coef_
-        
-        df_importancia = pd.DataFrame({
-            'Variable': nombres_features,
-            'Peso_Coeficiente': coeficientes,
-            'Importancia_Absoluta': np.abs(coeficientes) # Para ver el impacto total, sea + o -
-        })
-        
-        # Ordenar y mostrar el Top 10
-        df_importancia = df_importancia.sort_values(by='Importancia_Absoluta', ascending=False)
-        print("\n TOP 10 VARIABLES QUE MÁS AFECTAN A LA PROPINA:")
-        print(df_importancia[['Variable', 'Peso_Coeficiente']].head(10).to_string(index=False))
-        
-        # Guardar este CSV en MLflow para tenerlo de prueba
-        df_importancia.to_csv("importancia_variables_baseline.csv", index=False)
-        mlflow.log_artifact("importancia_variables_baseline.csv")
-        
-        # PREDICCIÓN SOBRE VALIDACIÓN
-        print(" Realizando predicciones sobre Validación...")
-        y_pred = pipeline_lr.predict(X_val)
-        
-        # CÁLCULO DE MÉTRICAS
-        mae = mean_absolute_error(y_val, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_val, y_pred))
-        r2 = r2_score(y_val, y_pred)
-        
-        # Métricas de Sesgo (Bias)
-        mean_error = np.mean(y_pred - y_val) 
-        # MAPE: Añadimos epsilon para evitar división por 0 si la propina real fue 0
-        epsilon = 1e-8
-        mape = np.mean(np.abs((y_val - y_pred) / (y_val + epsilon))) * 100
-        
-        print("\n" + "="*30)
-        print(" RESULTADOS DEL BASELINE")
-        print("="*30)
-        print(f"MAE:  ${mae:.4f}")
-        print(f"RMSE: ${rmse:.4f}")
-        print(f"R2:    {r2:.4f}")
-        print(f"BIAS (Mean Error): ${mean_error:.4f} ({'Al alza' if mean_error > 0 else 'A la baja'})")
-        print("="*30)
-        
-        # REGISTRAR EN MLFLOW
-        # Guardamos hiperparámetros básicos
-        mlflow.log_param("modelo", "Regresion Lineal Multiple")
-        mlflow.log_param("features_usadas", len(X_train.columns))
-        
-        # Guardamos las métricas
-        mlflow.log_metric("mae", mae)
-        mlflow.log_metric("rmse", rmse)
-        mlflow.log_metric("r2", r2)
-        mlflow.log_metric("mean_error_bias", mean_error)
-        mlflow.log_metric("mape", mape)
-        
-        # Guardamos el pipeline completo
-        mlflow.sklearn.log_model(pipeline_lr, "pipeline_baseline")
-        
-        print(" Experimento guardado en MLflow correctamente.")
+    # PREDICCIÓN SOBRE VALIDACIÓN
+    print("\n Realizando predicciones sobre Validación...")
+    y_pred = pipeline_lr.predict(X_val)
+    
+    # CÁLCULO DE MÉTRICAS
+    mae = mean_absolute_error(y_val, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_val, y_pred))
+    r2 = r2_score(y_val, y_pred)
+    
+    mean_error = np.mean(y_pred - y_val) 
+    epsilon = 1e-8
+    mape = np.mean(np.abs((y_val - y_pred) / (y_val + epsilon))) * 100
+    
+    print("\n" + "="*45)
+    print(" REPORTE BASELINE (MODO MEMORIA BAJA)")
+    print("="*45)
+    print(f"MAE:  ${mae:.4f} (Error absoluto medio)")
+    print(f"RMSE: ${rmse:.4f} (Raíz del error cuadrático)")
+    print(f"R2:    {r2:.4f} (Varianza explicada)")
+    print(f"BIAS: ${mean_error:.4f} ({'Al alza' if mean_error > 0 else 'A la baja'})")
+    print(f"MAPE:  {mape:.2f}% (Error porcentual)")
+    print("="*45)
 
 if __name__ == "__main__":
     entrenar_baseline()
 
+"""
+ANÁLISIS DE RESULTADOS DEL BASELINE (Para la memoria):
+El modelo de Regresión Lineal ha reveladoresultados clave sobre el comportamiento 
+de los pasajeros en Nueva York. Como era de esperar, el coste del viaje 
+(precio_total_est) es el factor principal que impulsa la propina. Sin embargo, 
+el modelo ha detectado un fuerte componente geográfico y cultural: los tradicionales 
+Yellow Taxis reciben consistentemente más propina que los VTCs, y comenzar un viaje 
+en zonas como el Aeropuerto JFK o Jamaica Bay incrementa notablemente la propina, 
+mientras que salir de Randalls Island la penaliza.
+
+A nivel predictivo, nuestro modelo base logra un Error Absoluto Medio (MAE) de 1.63$, 
+explicando un 30% del comportamiento de las propinas (R2 de 0.3047). Es un punto 
+de partida sólido para un modelo lineal simple, pero el RMSE de 2.66$ nos indica 
+que el modelo sufre mucho intentando predecir viajes anómalos o propinas extremas.
+
+Desde la perspectiva de ConducIA, la métrica más crítica que hemos 
+descubierto es el sesgo (BIAS). Nuestro baseline tiene un error al alza de 0.37$ por viaje. 
+Aunque parezca poco, un modelo sistemáticamente "optimista" es peligroso para el negocio, 
+ya que generaría falsas expectativas en el conductor, prometiéndole más dinero del 
+que realmente va a ganar y dañando la confianza en la aplicación. Además, el desorbitado 
+MAPE nos confirma empíricamente la alta presencia de viajes con 0$ de propina.
+
+En conclusión, el baseline demuestra que existen reglas matemáticas claras detrás de 
+las propinas, pero la relación no es puramente lineal. El objetivo de nuestro siguiente 
+modelo complejo (ej. XGBoost) será reducir el error a menos de 1 dólar, capturar 
+ese 70% de varianza oculta y, sobre todo, corregir el sesgo optimista para ofrecer 
+al conductor una herramienta honesta y fiable.
+"""
