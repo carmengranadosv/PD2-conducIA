@@ -5,7 +5,7 @@ from pathlib import Path
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
-INPUT_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'datos_finales.parquet')
+INPUT_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'datos_final.parquet')
 
 # Creamos una carpeta específica para los datos del modelo
 OUTPUT_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'problema5')
