@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "jax[cpu]>=0.9.2",
     "matplotlib>=3.10.8",
     "mlflow>=1.27.0",
     "nbstripout>=0.9.1",
