@@ -10,7 +10,8 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Deep Learning (Keras/TensorFlow)
-from tensorflow.keras import models, layers, callbacks
+from tensorflow.keras import models, layers, callbacks, Input, optimizers
+from tensorflow.keras.layers import BatchNormalization
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
@@ -60,23 +61,31 @@ def entrenar_red_neuronal():
     print(" Construyendo la arquitectura de la red...")
     input_dim = X_train_prep.shape[1] # Cuántas columnas nos han quedado tras el OneHotEncoder
     
-    model = models.Sequential()
-    # Primera capa oculta: 64 neuronas, función de activación ReLU
-    model.add(layers.Dense(64, activation='relu', input_shape=(input_dim,)))
-    # Segunda capa oculta: 32 neuronas, ReLU para aprender patrones complejos
-    model.add(layers.Dense(32, activation='relu'))
-    # Capa de salida: 1 sola neurona SIN activación (porque queremos predecir un valor continuo en dólares)
-    model.add(layers.Dense(1))
+    model = models.Sequential([
+        Input(shape=(input_dim,)), # Nueva forma recomendada por Keras para evitar warnings
+        layers.Dense(128, activation='relu'),
+        BatchNormalization(),
+        layers.Dropout(0.2), # Apagamos el 20% de neuronas para que no se memorice los barrios
+
+        layers.Dense(64, activation='relu'),
+        BatchNormalization(),
+        layers.Dropout(0.1),
+
+        layers.Dense(32, activation='relu'),
+        layers.Dense(1) # Salida lineal
+    ])
+
+    optimizador = optimizers.Adam(learning_rate=0.001)
 
     # Compilación
-    model.compile(optimizer='rmsprop', loss='mse', metrics=['mae'])
+    model.compile(optimizer='rmsprop', loss='mae', metrics=['mse'])
 
     # ENTRENAMIENTO CON EARLY STOPPING
     print(" Entrenando la red neuronal ...")
     early_stopping = callbacks.EarlyStopping(
         monitor='val_loss', # Vigila el error en validación
-        patience=5,         # Si en 5 vueltas no mejora, para
-        restore_best_weights=True # Quédate con el mejor modelo, no con el último
+        patience=8,         # Si en X vueltas no mejora, para
+        restore_best_weights=True # El mejor modelo, no con el último
     )
 
     history = model.fit(
