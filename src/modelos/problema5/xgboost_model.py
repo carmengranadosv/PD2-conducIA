@@ -65,7 +65,7 @@ def entrenar_xgboost():
     df_test = pq.ParquetFile(TEST_FILE).read_row_group(0).to_pandas()
 
     # 2. SEPARAR X e y
-    columnas_a_ignorar = ['propina', 'origen_id', 'destino_id']
+    columnas_a_ignorar = ['propina', 'origen_id', 'destino_id', 'destino_zona', 'destino_barrio']
 
     def prepare_xy(df):
         X = df.drop(columns=[col for col in columnas_a_ignorar if col in df.columns])

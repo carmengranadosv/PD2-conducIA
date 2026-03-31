@@ -65,7 +65,7 @@ def entrenar_baseline():
     df_test = pq.ParquetFile(TEST_FILE).read_row_group(0).to_pandas()
 
     # SEPARAR X e y (Variable Objetivo: propina)
-    columnas_a_ignorar = ['propina', 'origen_id', 'destino_id']
+    columnas_a_ignorar = ['propina', 'origen_id', 'destino_id', 'destino_zona', 'destino_barrio']
 
     # Para no repetir el código de preparar los df
     def prepare_xy(df):
