@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
+import json
+import joblib
 from pathlib import Path
 import pyarrow.parquet as pq
 
@@ -14,31 +16,68 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
 DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'problema5')
+RESULTS_DIR = os.path.join(DATA_DIR, 'results') # Aquí guardamos los resulados de las métricas
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 TRAIN_FILE = os.path.join(DATA_DIR, 'train.parquet')
 VAL_FILE = os.path.join(DATA_DIR, 'val.parquet')
+TEST_FILE = os.path.join(DATA_DIR, 'test.parquet')
+
+# Función para calcular la importancia de las variables
+def extraer_importancia_lr(pipeline, col_num, col_cat):
+    """Extrae los coeficientes del modelo."""
+    modelo = pipeline.named_steps['modelo']
+    prepro = pipeline.named_steps['preprocesamiento']
+    nombres_cat = prepro.named_transformers_['cat'].get_feature_names_out(col_cat)
+    nombres_total = np.concatenate([col_num, nombres_cat])
+    
+    importancia = pd.DataFrame({
+        'feature': nombres_total,
+        'coeficiente': modelo.coef_,
+        'abs_impacto': np.abs(modelo.coef_)
+    }).sort_values(by='abs_impacto', ascending=False)
+    return importancia
+
+# Función para calcular las métricas del modelo
+def calcular_metricas(y_true, y_pred, nombre_set):
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    r2 = r2_score(y_true, y_pred)
+    bias = np.mean(y_pred - y_true)
+    epsilon = 1e-8
+    mape = np.mean(np.abs((y_true - y_pred) / (y_true + epsilon))) * 100
+    
+    return {
+        f"{nombre_set}_mae": float(mae),
+        f"{nombre_set}_rmse": float(rmse),
+        f"{nombre_set}_r2": float(r2),
+        f"{nombre_set}_bias": float(bias),
+        f"{nombre_set}_mape": float(mape)
+    }
 
 def entrenar_baseline():
-    print(" Iniciando entrenamiento del Baseline (Regresión Lineal)...")
-
-    # CARGAR DATOS
-    parquet_train = pq.ParquetFile(TRAIN_FILE)
-    parquet_val = pq.ParquetFile(VAL_FILE)
+    print("Iniciando entrenamiento del Baseline (Regresión Lineal)...")
 
     # Solo leemos el primer grupo de filas 
-    df_train = parquet_train.read_row_group(0).to_pandas()
-    df_val = parquet_val.read_row_group(0).to_pandas()
+    df_train = pq.ParquetFile(TRAIN_FILE).read_row_group(0).to_pandas()
+    df_val = pq.ParquetFile(VAL_FILE).read_row_group(0).to_pandas()
+    df_test = pq.ParquetFile(TEST_FILE).read_row_group(0).to_pandas()
 
     # SEPARAR X e y (Variable Objetivo: propina)
     columnas_a_ignorar = ['propina', 'origen_id', 'destino_id']
 
-    X_train = df_train.drop(columns=[col for col in columnas_a_ignorar if col in df_train.columns])
-    y_train = df_train['propina']
-    
-    X_val = df_val.drop(columns=[col for col in columnas_a_ignorar if col in df_val.columns])
-    y_val = df_val['propina']
+    # Para no repetir el código de preparar los df
+    def prepare_xy(df):
+        X = df.drop(columns=[col for col in columnas_a_ignorar if col in df.columns])
+        y = df['propina']
+        return X, y
 
-    print(f" Entrenando con {len(X_train):,} registros. Validando con {len(X_val):,}.")
+    X_train, y_train = prepare_xy(df_train)
+    X_val, y_val = prepare_xy(df_val)
+    X_test, y_test = prepare_xy(df_test)
+
+    print(f"Datos: Train({len(X_train)}), Val({len(X_val)}), Test({len(X_test)})")
 
 
     # DEFINIR COLUMNAS POR TIPO
@@ -59,7 +98,7 @@ def entrenar_baseline():
     preprocesador = ColumnTransformer(
         transformers=[
             ('num', StandardScaler(), columnas_numericas),
-            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), columnas_categoricas)
+            ('cat', OneHotEncoder(handle_unknown='ignore'), columnas_categoricas)
         ],
         remainder='passthrough'
     )
@@ -71,81 +110,40 @@ def entrenar_baseline():
     ])
 
     # ENTRENAMIENTO
-    print(" Ajustando el Pipeline y entrenando el modelo...")
+    print("Ajustando el Pipeline y entrenando el modelo...")
     pipeline_lr.fit(X_train, y_train)
 
-    # COMPROBAR LA IMPORTANCIA DE LAS VARIABLES
-    print(" Analizando la importancia de las variables...")
-    modelo_lr = pipeline_lr.named_steps['modelo']
-    preprocesador_ajustado = pipeline_lr.named_steps['preprocesamiento']
+    # IMPORTANCIA
+    df_importancia = extraer_importancia_lr(pipeline_lr, columnas_numericas, columnas_categoricas)
+    df_importancia.to_csv(os.path.join(RESULTS_DIR, 'baseline_features.csv'), index=False)
 
-    nombres_num = columnas_numericas
-    nombres_cat = preprocesador_ajustado.named_transformers_['cat'].get_feature_names_out(columnas_categoricas)
-    nombres_features = np.concatenate([nombres_num, nombres_cat])
-    
-    coeficientes = modelo_lr.coef_
-    
-    df_importancia = pd.DataFrame({
-        'Variable': nombres_features,
-        'Peso_Coeficiente': coeficientes,
-        'Importancia_Absoluta': np.abs(coeficientes)
-    })
-    
-    df_importancia = df_importancia.sort_values(by='Importancia_Absoluta', ascending=False)
-    print("\n TOP 10 VARIABLES QUE MÁS AFECTAN A LA PROPINA:")
-    print(df_importancia[['Variable', 'Peso_Coeficiente']].head(10).to_string(index=False))
+    # EVALUACIÓN SOBRE VALIDACIÓN Y TEST
+    print("Calculando las métricas en validación y test...")
+    metrics_val = calcular_metricas(y_val, pipeline_lr.predict(X_val), "val")
+    metrics_test = calcular_metricas(y_test, pipeline_lr.predict(X_test), "test")
 
-    # PREDICCIÓN SOBRE VALIDACIÓN
-    print("\n Realizando predicciones sobre Validación...")
-    y_pred = pipeline_lr.predict(X_val)
+    # Unificar resultados
+    resultados = {
+        "model_name": "Baseline_LinearRegression",
+        **metrics_val,
+        **metrics_test
+    }
+
+    # GUARDAR RESULTADOS EN JSON
+    res_path = os.path.join(RESULTS_DIR, 'baseline_results.json')
+    with open(res_path, 'w') as f:
+        json.dump(resultados, f, indent=4)
     
-    # CÁLCULO DE MÉTRICAS
-    mae = mean_absolute_error(y_val, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_val, y_pred))
-    r2 = r2_score(y_val, y_pred)
-    
-    mean_error = np.mean(y_pred - y_val) 
-    epsilon = 1e-8
-    mape = np.mean(np.abs((y_val - y_pred) / (y_val + epsilon))) * 100
-    
-    print("\n" + "="*45)
-    print(" REPORTE BASELINE (MODO MEMORIA BAJA)")
-    print("="*45)
-    print(f"MAE:  ${mae:.4f} (Error absoluto medio)")
-    print(f"RMSE: ${rmse:.4f} (Raíz del error cuadrático)")
-    print(f"R2:    {r2:.4f} (Varianza explicada)")
-    print(f"BIAS: ${mean_error:.4f} ({'Al alza' if mean_error > 0 else 'A la baja'})")
-    print(f"MAPE:  {mape:.2f}% (Error porcentual)")
-    print("="*45)
+    # GUARDAR MODELO ENTRENADO
+    joblib.dump(pipeline_lr, os.path.join(RESULTS_DIR, 'baseline_model.joblib'))
+
+    print("\nEvaluación en TEST finalizada:")
+    print(f"  MAE:  ${resultados['test_mae']:.4f}")
+    print(f"  RMSE: ${resultados['test_rmse']:.4f}")
+    print(f"  R2:   {resultados['test_r2']:.4f}")
+    print(f"  BIAS: ${resultados['test_bias']:.4f}")
+    print(f"  Resultados guardados en: {res_path}")
 
 if __name__ == "__main__":
     entrenar_baseline()
 
-"""
-ANÁLISIS DE RESULTADOS DEL BASELINE (Para la memoria):
-El modelo de Regresión Lineal ha reveladoresultados clave sobre el comportamiento 
-de los pasajeros en Nueva York. Como era de esperar, el coste del viaje 
-(precio_total_est) es el factor principal que impulsa la propina. Sin embargo, 
-el modelo ha detectado un fuerte componente geográfico y cultural: los tradicionales 
-Yellow Taxis reciben consistentemente más propina que los VTCs, y comenzar un viaje 
-en zonas como el Aeropuerto JFK o Jamaica Bay incrementa notablemente la propina, 
-mientras que salir de Randalls Island la penaliza.
-
-A nivel predictivo, nuestro modelo base logra un Error Absoluto Medio (MAE) de 1.63$, 
-explicando un 30% del comportamiento de las propinas (R2 de 0.3047). Es un punto 
-de partida sólido para un modelo lineal simple, pero el RMSE de 2.66$ nos indica 
-que el modelo sufre mucho intentando predecir viajes anómalos o propinas extremas.
-
-Desde la perspectiva de ConducIA, la métrica más crítica que hemos 
-descubierto es el sesgo (BIAS). Nuestro baseline tiene un error al alza de 0.37$ por viaje. 
-Aunque parezca poco, un modelo sistemáticamente "optimista" es peligroso para el negocio, 
-ya que generaría falsas expectativas en el conductor, prometiéndole más dinero del 
-que realmente va a ganar y dañando la confianza en la aplicación. Además, el desorbitado 
-MAPE nos confirma empíricamente la alta presencia de viajes con 0$ de propina.
-
-En conclusión, el baseline demuestra que existen reglas matemáticas claras detrás de 
-las propinas, pero la relación no es puramente lineal. El objetivo de nuestro siguiente 
-modelo complejo (ej. XGBoost) será reducir el error a menos de 1 dólar, capturar 
-ese 70% de varianza oculta y, sobre todo, corregir el sesgo optimista para ofrecer 
-al conductor una herramienta honesta y fiable.
-"""
