@@ -1,65 +1,83 @@
+import os
 import pandas as pd
+import numpy as np
 import pyarrow.parquet as pq
+import joblib
+from pathlib import Path
 from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import roc_auc_score
-from sklearn.feature_selection import SelectFromModel
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import roc_auc_score, confusion_matrix, ConfusionMatrixDisplay
 
-# Cargamos los datos (Cargamos TODO lo numérico para que el algoritmo elija)
-ruta = 'data/processed/tlc_clean/problema2/train.parquet'
-columnas_candidatas = [
-    'oferta_inferida', 'temp_c', 'lluvia', 'precipitation', 'viento_kmh', 
-    'nieve', 'es_festivo', 'num_eventos', 'hora_sen', 'hora_cos', 
-    'dia_semana', 'es_fin_semana', 'origen_id', 'espera_min'
-]
+print("="*80)
+print(" MLP CASCADING - OPTIMIZACIÓN DE ZONA PARA EL CONDUCTOR")
+print("="*80)
 
-df = pq.read_table(ruta, columns=columnas_candidatas).to_pandas().head(100000)
+# ============================================================
+# 1. CONFIGURACIÓN Y CASCADING INPUT
+# ============================================================
+CONFIG = {
+    'ruta_train': 'data/processed/tlc_clean/problema2/train.parquet',
+    'ruta_demanda_p1': 'models/problema1/predicciones_demanda.csv', # El "Cascade"
+    'output_dir': 'models/problema2',
+    'filas_max': 200000
+}
 
-# Creamos el objetivo (Target)
-df['target'] = (df['espera_min'] <= 10).astype(int)
-df['demanda_score'] = 0.5
+# Simulamos la entrada del Problema 1 si no existe el archivo aún
+# (En el cluster esto leería la salida real del modelo LSTM de tus amigos)
+def get_demanda_p1(df):
+    return df['num_eventos'] * 1.2 # Placeholder del cascading input
 
-# Definimos X inicial con todas las posibles
-X_inicial = df.drop(['espera_min', 'target'], axis=1).fillna(0)
-y = df['target']
+# ============================================================
+# 2. PREPARACIÓN DE DATOS (MULTICLASE)
+# ============================================
+cols = ['origen_id', 'oferta_inferida', 'temp_c', 'lluvia', 'num_eventos', 'espera_min', 'hora_sen']
+df = pq.read_table(CONFIG['ruta_train'], columns=cols).to_pandas().head(CONFIG['filas_max'])
 
-# --- FUNDAMENTO MATEMÁTICO: SELECCIÓN AUTOMÁTICA ---
-print("Ejecutando selección automática de variables significativas...")
-# Usamos un Random Forest como 'juez' para medir la importancia real
-juez = RandomForestClassifier(n_estimators=50, random_state=42)
-selector = SelectFromModel(juez, threshold="mean") # Solo pasan las que aportan más que la media
-selector.fit(X_inicial, y)
+# CASCADING: Integramos la demanda del Problema 1
+df['demanda_p1'] = get_demanda_p1(df)
 
-# Transformamos X para quedarnos solo con las elegidas por el algoritmo
-X_significativas = selector.transform(X_inicial)
-columnas_elegidas = X_inicial.columns[selector.get_support()]
+# TARGET: ¿Éxito en < 10 min?
+df['exito'] = (df['espera_min'] <= 10).astype(int)
 
-print(f"El algoritmo ha decidido que las variables más significativas son: {list(columnas_elegidas)}")
+# Filtramos solo los éxitos para que el modelo aprenda qué zonas son las "ganadoras"
+df_ganadoras = df[df['exito'] == 1].copy()
 
-# Escalado de las variables elegidas
+# Encoder para las zonas (La "n" de tu arquitectura)
+le = LabelEncoder()
+df_ganadoras['zona_target'] = le.fit_transform(df_ganadoras['origen_id'])
+n_zonas = len(le.classes_)
+
+print(f" Arquitectura: Capa final Softmax para {n_zonas} zonas.")
+
+# ============================================================
+# 3. ENTRENAMIENTO MLP (SOFTMAX)
+# ============================================================
+X = df_ganadoras[['demanda_p1', 'oferta_inferida', 'temp_c', 'lluvia', 'hora_sen']]
+y = df_ganadoras['zona_target']
+
 scaler = StandardScaler()
-X_escalado = scaler.fit_transform(X_significativas)
+X_sc = scaler.fit_transform(X)
 
-# Configuramos el cerebro (MLP)
-print("Entrenando la Red Neuronal con la selección automática...")
 mlp = MLPClassifier(
-    hidden_layer_sizes=(64, 32), 
-    activation='relu', 
-    solver='adam', 
-    max_iter=20, 
-    random_state=42,
-    verbose=True 
+    hidden_layer_sizes=(128, 64), # Un poco más grande para manejar n zonas
+    activation='relu',
+    solver='adam',
+    max_iter=50,
+    verbose=True,
+    random_state=42
 )
 
-mlp.fit(X_escalado, y)
+print("\n Entrenando modelo de recomendación de zonas...")
+mlp.fit(X_sc, y)
 
-# Evaluamos el modelo
-probabilidades = mlp.predict_proba(X_escalado)[:, 1]
-score = roc_auc_score(y, probabilidades)
+# ============================================================
+# 4. GUARDADO Y EXPLICACIÓN
+# ============================================================
+joblib.dump(mlp, Path(CONFIG['output_dir']) / 'mlp_cascading.pkl')
+joblib.dump(le, Path(CONFIG['output_dir']) / 'zona_encoder.pkl')
 
-print("\n" + "="*30)
-print(f"RESULTADO MODELO 1 (MLP)")
-print(f"ROC-AUC FINAL: {score:.4f}")
-print(f"Variables finales: {list(columnas_elegidas)}")
-print("="*30)
+print(f"\n{'='*80}")
+print(f" MODELO LISTO PARA EL CONDUCTOR")
+print(f" Al recibir el contexto actual, el modelo devuelve una")
+print(f" distribución Softmax sobre las {n_zonas} zonas.")
+print(f"{'='*80}")
