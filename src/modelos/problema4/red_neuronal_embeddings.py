@@ -1,11 +1,29 @@
 """
-PROYECTO: ConducIA - PD2 (GIDIA)
-MÓDULO: red_neuronal_embeddings.py
-========================================================================================
 DESCRIPCIÓN:
-    Implementación de una Red Neuronal Profunda (MLP) con capas de Embedding 
-    para las Zonas de NY y capas Densas para las variables climáticas.
-========================================================================================
+    Este script implementa una Red Neuronal Profunda (MLP) avanzada para el Problema 4.
+    Utiliza capas de Embedding para capturar la identidad de las zonas de NY y 
+    capas Densas procesar las variables climáticas y temporales.
+
+OBJETIVO:
+    Superar el benchmark del Baseline mediante el aprendizaje de representaciones 
+    vectoriales (embeddings) de las zonas y relaciones no lineales de los datos.
+
+FLUJO DE TRABAJO:
+    1. CARGA: Lee los archivos train_p4, val_p4 y test_p4 desde data/processed.
+    2. PREPROCESAMIENTO: Escala variables numéricas (StandardScaler) y codifica 
+       las IDs de zona (LabelEncoder) para la capa de entrada.
+    3. ARQUITECTURA: 
+       - Rama A: Capa de Embedding para transformar 262 zonas en vectores densos.
+       - Rama B: Capas densas para variables climáticas y temporales.
+       - Fusión: Concatenación de ambas ramas seguida de bloques con BatchNormalization 
+         y Dropout para evitar el sobreajuste (overfitting).
+    4. ENTRENAMIENTO: Ajusta los pesos usando el optimizador Adam y pérdida MAE, 
+       aplicando Early Stopping para detenerse en el mejor punto de validación.
+    5. VALIDACIÓN: Monitorea el progreso mediante loss y mse en el set de Val.
+    6. EVALUACIÓN FINAL: Reporta métricas definitivas (MAE, RMSE, R2, BIAS, MAPE) 
+       usando el set de Test.
+    7. PERSISTENCIA: Guarda el modelo entrenado (.keras), las métricas (.json) 
+       y los transformadores (scaler y encoder) en la carpeta 'results'.
 """
 
 import pandas as pd
