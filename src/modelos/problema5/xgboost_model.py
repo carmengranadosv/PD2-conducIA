@@ -80,8 +80,13 @@ def entrenar_xgboost():
 
     # 3. DEFINIR COLUMNAS POR TIPO
     columnas_categoricas = [
-        'tipo_vehiculo', 'origen_zona', 'origen_barrio', 
-        'destino_zona', 'destino_barrio', 'evento_tipo', 'franja_horaria'
+        'tipo_vehiculo',   # "Yellow Taxi" o "VTC"
+        'origen_zona',     # Texto de la zona
+        'origen_barrio',   # Texto del barrio (Manhattan, Queens...)
+        # 'destino_zona',    # Texto de la zona
+        # 'destino_barrio',  # Texto del barrio
+        'evento_tipo',     # "No hay", "Concierto", etc.
+        'franja_horaria'   # "Madrugada", "Noche", etc.
     ]
     columnas_numericas = [col for col in X_train.columns if col not in columnas_categoricas]
 

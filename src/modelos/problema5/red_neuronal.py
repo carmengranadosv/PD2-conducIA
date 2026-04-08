@@ -63,10 +63,15 @@ def entrenar_red_neuronal():
     X_val, y_val = prepare_xy(df_val)
     X_test, y_test = prepare_xy(df_test)
 
-    # DEFINIR COLUMNAS
+    # DEFINIR COLUMNAS POR TIPO
     columnas_categoricas = [
-        'tipo_vehiculo', 'origen_zona', 'origen_barrio', 
-        'destino_zona', 'destino_barrio', 'evento_tipo', 'franja_horaria'
+        'tipo_vehiculo',   # "Yellow Taxi" o "VTC"
+        'origen_zona',     # Texto de la zona
+        'origen_barrio',   # Texto del barrio (Manhattan, Queens...)
+        # 'destino_zona',    # Texto de la zona
+        # 'destino_barrio',  # Texto del barrio
+        'evento_tipo',     # "No hay", "Concierto", etc.
+        'franja_horaria'   # "Madrugada", "Noche", etc.
     ]
     columnas_numericas = [col for col in X_train.columns if col not in columnas_categoricas]
 
@@ -105,7 +110,7 @@ def entrenar_red_neuronal():
     optimizador = optimizers.Adam(learning_rate=0.001)
 
     # Compilación
-    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    model.compile(optimizer='adam', loss='mae', metrics=['mse'])
 
     # ENTRENAMIENTO CON EARLY STOPPING
     print("Entrenando la red neuronal ...")

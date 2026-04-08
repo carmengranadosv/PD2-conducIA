@@ -85,8 +85,8 @@ def entrenar_baseline():
         'tipo_vehiculo',   # "Yellow Taxi" o "VTC"
         'origen_zona',     # Texto de la zona
         'origen_barrio',   # Texto del barrio (Manhattan, Queens...)
-        'destino_zona',    # Texto de la zona
-        'destino_barrio',  # Texto del barrio
+        # 'destino_zona',    # Texto de la zona
+        # 'destino_barrio',  # Texto del barrio
         'evento_tipo',     # "No hay", "Concierto", etc.
         'franja_horaria'   # "Madrugada", "Noche", etc.
     ]
