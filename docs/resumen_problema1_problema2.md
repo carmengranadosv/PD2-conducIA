@@ -82,33 +82,6 @@ Lo más importante que produce es:
 - resultados en `reports/problema1/resultados/`
 - gráficos y análisis en `reports/problema1/`
 
-### Scripts que parecen antiguos o duplicados
-
-Estos siguen en el repo, pero por el código parecen haber quedado como versiones previas, alternativas o experimentos:
-
-`samplear_datos.py`
-- Parece antiguo.
-- La propia idea de `preparar_datos.py` es sustituir el pipeline con sampleo y trabajar ya con agregación directa.
-
-`division_datos.py`
-- Parece parte del flujo antiguo basado en sampleo.
-- Divide viajes individuales antes de agregar.
-
-`agregacion.py`
-- Parece anterior a `features.py`.
-- En [features.py](/home/marcospoza/PD2/PD2-conducIA/src/modelos/problema1/features.py) aparece incluso el comentario: "puedes borrar agregacion.py — este lo reemplaza".
-
-`modelo1_lstm.py`
-- Parece una versión anterior del LSTM.
-- El script más consistente con el pipeline actual es `lstm.py`.
-
-`predicciones_formateadas.py`
-- No es entrenamiento.
-- Es más bien una utilidad de exportación de predicciones ya hechas.
-
-`problema1.md`
-- Documentación antigua.
-- Ojo: describe un flujo donde `agregacion.py` y `samplear_datos.py` son centrales, pero eso ya no parece el camino más actual del repo.
 
 ### Resumen corto de Problema 1
 
@@ -187,15 +160,6 @@ El flujo más coherente en el código actual es:
 `p2/mlp.py`
 - Entrena una red densa para clasificación binaria.
 
-`p2/lightgbm.py`
-- Entrena un modelo de boosting.
-- Por estructura, parece uno de los candidatos más serios del módulo.
-
-`p2/gnn.py`
-- Construye un grafo de zonas origen-destino.
-- Añade propagación entre zonas vecinas antes de clasificar.
-- Es el modelo más experimental/sofisticado.
-
 `p2/comparar_modelos.py`
 - Compara métricas de los modelos entrenados.
 
@@ -207,30 +171,6 @@ Lo más importante que produce es:
 - features en `data/processed/tlc_clean/problema2/features/`
 - modelos en `models/problema2/`
 - resultados y plots en `reports/problema2/`
-
-### Scripts que parecen antiguos o menos usados
-
-Dentro de [src/modelos/problema2](/home/marcospoza/PD2/PD2-conducIA/src/modelos/problema2) hay varios scripts que parecen de una versión previa:
-
-`preparar_dataset_p2.py`
-- Parece una preparación inicial antigua.
-- Genera `dataset_p2.parquet`, pero no coincide con el pipeline actual de `p2/preparar_datos.py`.
-
-`division_datos.py`
-- Probablemente pertenece a ese flujo antiguo.
-
-`baseline_p2.py`
-- Parece baseline de la versión previa.
-
-`modelo1_mlp.py`
-- Parece un experimento antiguo de MLP "cascading".
-- Usa placeholders y una lógica distinta del pipeline actual.
-
-`generar_tasas_p2.py`
-- Suena a utilidad intermedia antigua.
-
-`verificar_datos.py`
-- Parece script de comprobación, no parte del pipeline principal.
 
 ### Resumen corto de Problema 2
 
@@ -244,40 +184,3 @@ La idea más importante es esta:
 - Problema 2 reutiliza esa señal como `demanda_p1` para ayudar a decidir qué zonas son mejores.
 
 ---
-
-## Resumen General
-
-### Qué parece vigente ahora mismo
-
-`Problema 1`
-- pipeline principal: `preparar_datos.py`, `features.py`, `baseline.py`, `lstm.py`
-- análisis: `comparar_modelos.py`, `analizar_predicciones.py`
-
-`Problema 2`
-- pipeline principal: carpeta `src/modelos/p2`
-- no parece que la carpeta `src/modelos/problema2` sea la versión principal actual
-
-### Qué parece legado o sobrante
-
-`Problema 1`
-- `samplear_datos.py`
-- `division_datos.py`
-- `agregacion.py`
-- `modelo1_lstm.py`
-
-`Problema 2`
-- casi toda la carpeta `src/modelos/problema2/` parece versión anterior o paralela
-
-### En una sola frase
-
-Ahora mismo el repo parece estar evolucionando desde pipelines antiguos a otros más directos:
-- en Problema 1, el flujo nuevo evita el sampleo y trabaja agregando directamente;
-- en Problema 2, la carpeta activa parece ser `p2`, no `problema2`;
-- y ambos problemas están conectados porque P2 aprovecha la predicción de demanda de P1.
-
----
-
-## Nota importante
-
-Esto está deducido leyendo el código actual del repo.  
-Si hay scripts que sí seguís usando en clase o en vuestro flujo real aunque parezcan antiguos, dímelo y te actualizo el documento para que refleje exactamente vuestra forma de trabajo.
