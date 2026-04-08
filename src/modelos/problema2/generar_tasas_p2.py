@@ -1,7 +1,3 @@
-"""Generamos las tasas bases, que son un porcentaje de éxito. 
-Le sirven al conductor para no perder el tiempo y saber
-dónde es más probable que salte el próximo viaje. """
-
 import pandas as pd
 import os
 
@@ -14,19 +10,25 @@ def generar_tasas():
         print(f"❌ Error: No se encuentra {path_train}. ¿Ejecutaste division_datos.py?")
         return
 
-    print("Calculando tasas históricas...")
+    print("Calculando tasas y demanda histórica...")
     df = pd.read_parquet(path_train, columns=['origen_id', 'hora', 'espera_min'])
     
     # Éxito si espera <= 10 min
     df['exito'] = (df['espera_min'] <= 10).astype(int)
     
-    # Agrupamos por zona y hora
-    tasa_id_hora = df.groupby(['origen_id', 'hora'])['exito'].mean().reset_index(name='tasa_historica')
+    # Agrupamos por zona y hora sacando media (tasa) y conteo (demanda)
+    agregado = df.groupby(['origen_id', 'hora']).agg(
+        tasa_historica=('exito', 'mean'),
+        demanda_real=('exito', 'size')
+    ).reset_index()
+    
+    # Normalizamos la demanda para que sea un score entre 0 y 1
+    agregado['demanda_score'] = agregado['demanda_real'] / agregado['demanda_real'].max()
     
     # Guardamos en la misma carpeta del Problema 2
     output_csv = os.path.join(ruta_p2, 'tasas_base.csv')
-    tasa_id_hora.to_csv(output_csv, index=False)
-    print(f"✅ Tasas guardadas en: {output_csv}")
+    agregado.to_csv(output_csv, index=False)
+    print(f"✅ Tasas y demanda guardadas en: {output_csv}")
 
 if __name__ == "__main__":
     generar_tasas()

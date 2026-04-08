@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 # ============================================================
 
 PLOTS_DIR = Path('reports/problema1/plots')
-RESULTS_DIR = Path('reports/problema1/resultados')
+RESULTS_DIR = Path('models/problema1')
 
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -62,7 +62,7 @@ X_test_sc  = scaler.transform(X_test)
 # ── 3. Entrenar ───────────────────────────────────────────────────────────────
 print("\nEntrenando Regresión Logística...")
 lr = LogisticRegression(
-    class_weight='balanced',
+    class_weight='balanced',# como hemos puesto target top 33% añadimos el balanced para que como hay menos casos de éxito (33% de 1s y 67% de 0s), cuando acertemos un éxito, le demos un poco más de valor evitando que el modelo se vuelva perezoso y siempre prediga 0.
     max_iter=500,
     random_state=42,
     C=1.0,

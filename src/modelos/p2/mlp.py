@@ -23,10 +23,10 @@ PLOTS_DIR    = Path('reports/problema2/plots');      PLOTS_DIR.mkdir(parents=Tru
 RESULTS_DIR  = Path('reports/problema2/resultados'); RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 CONFIG = {
-    'hidden_layers': [128, 64, 32],
-    'dropout': 0.3,
-    'epochs': 5,
-    'batch_size': 512,
+    'hidden_layers': [256, 128, 64],
+    'dropout': 0.2, # bajamos un poco el dropout para que aprenda más
+    'epochs': 10, # ponemos más épocas para darle margen pero el Early Stopping parará si no es necesario
+    'batch_size': 1024, # doble de bathc para mayor estabilidad en JAX
     'learning_rate': 0.001,
     'patience': 3,
 }
@@ -68,7 +68,8 @@ X_test  = scaler.transform(X_test)
 joblib.dump(scaler, MODELS_DIR / 'mlp_scaler.pkl')
 
 # Balance de clases
-pos_weight = float((y_train == 0).sum() / (y_train == 1).sum())
+pos_weight = 0.5  # Esto hará que el modelo sea un poco más exigente para dar un "1"
+# pos_weight = float((y_train == 0).sum() / (y_train == 1).sum())
 print(f"  Peso clase positiva: {pos_weight:.2f}")
 
 # ── 4. Modelo MLP ─────────────────────────────────────────────────────────────

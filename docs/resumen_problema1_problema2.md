@@ -127,6 +127,8 @@ Y el modelo más importante ahora mismo parece ser el `Random Forest`, porque ad
 
 El Problema 2 intenta decidir si una zona es una buena opción para un conductor en un momento dado.
 
+Introduce la oferta Inferida como un Proxy de competencia, lo que hace es que mira los viajes que terminaron (destino_id) en los últimos 10-20 minutos. Es inferida porque suponemos que ese coche que acaba de llegar a una determinada zona, ahora forma parte de la oferta de coches disponible en esa zona. En el caso de nuestro modelo, si por ejemplo en la zona 4 (Times Square) han llegado 100 taxis en los últimos 10 minutos, hay una oferta inferida altísima. El modelo entenderá que, aunque haya mucha demanda, hay demasiada competencia y quizás no te conviene ir allí.
+
 No predice directamente "cuántos viajes habrá", sino algo más tipo:
 - qué zonas tienen más probabilidad de ser buenas,
 - o dónde un taxi podría encontrar un viaje con mejores condiciones.
@@ -134,6 +136,8 @@ No predice directamente "cuántos viajes habrá", sino algo más tipo:
 En el código actual esto se formula como una clasificación binaria:
 - `target = 1` si la zona está entre las mejores de esa ventana temporal,
 - `target = 0` si no.
+
+Como target hemos decidido no poner una ventana fija ('éxito si tardas menos de 5 min') ya que el modelo fallaría porque un viernes noche casi nadie tarda menos de 5 min, y el modelo diría qeu toda la ciudad es mala. En cambio, ponemos como éxito solo al tercio superior de las zonas.
 
 ### La parte importante: hay dos versiones
 
