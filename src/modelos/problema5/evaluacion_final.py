@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
+import json
+import joblib
 from pathlib import Path
 import pyarrow.parquet as pq
 
@@ -14,10 +16,38 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
 DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'problema5')
+RESULTS_DIR = os.path.join(DATA_DIR, 'results')
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 TRAIN_FILE = os.path.join(DATA_DIR, 'train.parquet')
 VAL_FILE = os.path.join(DATA_DIR, 'val.parquet')
 TEST_FILE = os.path.join(DATA_DIR, 'test.parquet') 
+
+def calcular_metricas(y_true, y_pred, nombre_set):
+    # Convertimos a series de pandas para facilitar el filtrado si vienen como arrays
+    y_true_s = pd.Series(y_true)
+    y_pred_s = pd.Series(y_pred)
+    
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    r2 = r2_score(y_true, y_pred)
+    bias = np.mean(y_pred - y_true)
+    
+    # Solo lo calculamos donde la propina es mayor a 0.50$
+    mask = y_true_s > 0.5
+    if mask.any():
+        mape = np.mean(np.abs((y_true_s[mask] - y_pred_s[mask]) / y_true_s[mask])) * 100
+    else:
+        mape = 0.0
+    
+    return {
+        f"{nombre_set}_mae": float(mae),
+        f"{nombre_set}_rmse": float(rmse),
+        f"{nombre_set}_r2": float(r2),
+        f"{nombre_set}_bias": float(bias),
+        f"{nombre_set}_mape": float(mape)
+    }
 
 def evaluacion_final():
     print("INICIANDO EVALUACIÓN FINAL DEL PROYECTO (XGBOOST)...")
@@ -30,25 +60,30 @@ def evaluacion_final():
 
     # 2. JUNTAR TRAIN Y VAL (Maximizando el conocimiento)
     print("Combinando Train y Validación para el reentrenamiento...")
-    df_entrenamiento_total = pd.concat([df_train, df_val], ignore_index=True)
+    df_total_train = pd.concat([df_train, df_val], ignore_index=True)
 
-    # 3. SEPARAR X e y
-    columnas_a_ignorar = ['propina', 'origen_id', 'destino_id']
+    # 3. SEPARAR X e y (Siguiendo la lógica "Pre-viaje" del profesor)
+    columnas_a_ignorar = [
+        'propina', 'origen_id', 'destino_id', 
+        'destino_zona', 'destino_barrio' 
+    ]
 
-    X_train_total = df_entrenamiento_total.drop(columns=[col for col in columnas_a_ignorar if col in df_entrenamiento_total.columns])
-    y_train_total = df_entrenamiento_total['propina']
-    
-    X_test = df_test.drop(columns=[col for col in columnas_a_ignorar if col in df_test.columns])
-    y_test = df_test['propina']
+    def prepare_xy(df):
+        X = df.drop(columns=[col for col in columnas_a_ignorar if col in df.columns])
+        y = df['propina']
+        return X, y
 
-    print(f"Entrenando al Campeón con {len(X_train_total):,} registros. Evaluando sobre {len(X_test):,} registros.")
+    X_train_final, y_train_final = prepare_xy(df_total_train)
+    X_test, y_test = prepare_xy(df_test)
+
+    print(f"Entrenando al Campeón con {len(X_train_final):,} registros. Evaluando sobre {len(X_test):,} registros.")
 
     # 4. DEFINIR COLUMNAS
     columnas_categoricas = [
         'tipo_vehiculo', 'origen_zona', 'origen_barrio', 
-        'destino_zona', 'destino_barrio', 'evento_tipo', 'franja_horaria'
+        'evento_tipo', 'franja_horaria'
     ]
-    columnas_numericas = [col for col in X_train_total.columns if col not in columnas_categoricas]
+    columnas_numericas = [col for col in X_train_final.columns if col not in columnas_categoricas]
 
     # 5. CREAR EL PIPELINE DEL MEJOR MODELO
     preprocesador = ColumnTransformer(
@@ -74,26 +109,38 @@ def evaluacion_final():
 
     # 6. ENTRENAMIENTO DEFINITIVO
     print("Reentrenando XGBoost con todos los datos...")
-    pipeline_xgb_final.fit(X_train_total, y_train_total)
+    pipeline_xgb_final.fit(X_train_final, y_train_final)
 
     # 7. EL EXAMEN FINAL (TEST)
     print("\nEnfrentando el modelo al conjunto de Test...")
-    y_pred_test = pipeline_xgb_final.predict(X_test)
+    y_pred = pipeline_xgb_final.predict(X_test)
     
     # 8. CÁLCULO DE MÉTRICAS OFICIALES
-    mae = mean_absolute_error(y_test, y_pred_test)
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
-    r2 = r2_score(y_test, y_pred_test)
-    mean_error = np.mean(y_pred_test - y_test) 
+    metrics_finales_dict = calcular_metricas(y_test, y_pred, "test")
+    mae = metrics_finales_dict["test_mae"]
+    rmse = metrics_finales_dict["test_rmse"]
+    r2 = metrics_finales_dict["test_r2"]
+    bias = metrics_finales_dict["test_bias"]
+    mape = metrics_finales_dict["test_mape"]
     
-    print("\n" + "="*50)
     print("RESULTADOS FINALES (SOBRE TEST)")
     print("="*50)
     print(f"MAE:  ${mae:.4f} (Error absoluto medio)")
     print(f"RMSE: ${rmse:.4f} (Raíz del error cuadrático)")
     print(f"R2:    {r2:.4f} (Varianza explicada)")
-    print(f"BIAS: ${mean_error:.4f} ({'Al alza' if mean_error > 0 else 'A la baja'})")
-    print("="*50)
+    print(f"BIAS: ${bias:.4f} ({'Al alza' if bias > 0 else 'A la baja'})")
+    print(f"MAPE: {mape:.4f} (Error porcentual absoluto medio)")
 
+    # 9. GUARDADO DE SEGURIDAD
+    final_metrics = {
+        "mae": float(mae),
+        "rmse": float(rmse),
+        "r2": float(r2),
+        "bias": float(bias),
+        "mape": float(mape)
+    }
+    
+    with open(os.path.join(RESULTS_DIR, 'final_test_metrics.json'), 'w') as f:
+        json.dump(final_metrics, f, indent=4)
 if __name__ == "__main__":
     evaluacion_final()
