@@ -1,31 +1,12 @@
-"""
-DESCRIPCIÓN:
-    Implementación de una Red de Grafos Espacio-Temporal (ST-GCN) usando Keras 3.
-    Este modelo utiliza una Matriz de Adyacencia para aprender relaciones espaciales
-    entre las zonas de Nueva York y predecir velocidades simultáneas.
-
-OBJETIVO:
-    Capturar la interdependencia del tráfico urbano mediante convoluciones de grafo,
-    permitiendo que la información de una zona fluya hacia sus vecinas.
-
-FLUJO DE TRABAJO:
-    1. CARGA: Lee la matriz de adyacencia (.npy) y los datasets procesados.
-    2. NORMALIZACIÓN: Pre-calcula la matriz de adyacencia normalizada (D^-1 * A).
-    3. ARQUITECTURA: 
-       - Capas GCN: Realizan la propagación de mensajes entre nodos vecinos.
-       - Bloque Denso: Procesa las características extraídas para la predicción final.
-    4. EVALUACIÓN: Calcula métricas (MAE, RMSE, R2, BIAS, MAPE) siguiendo el 
-       estándar del proyecto para asegurar la comparabilidad.
-    5. PERSISTENCIA: Guarda el modelo (.keras) y los resultados (.json) en 'results'.
-"""
-
 import os
 import numpy as np
+import pandas as pd
 import keras
 import json
 import joblib
 from keras import layers, ops
 from pathlib import Path
+from sklearn.preprocessing import StandardScaler
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -34,49 +15,59 @@ RESULTS_DIR = os.path.join(DATA_DIR, 'results')
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # ==========================================
-# 1. CAPA PERSONALIZADA DE GRAFOS (GCN)
+# 1. CAPA PERSONALIZADA GCN (A * X * W)
 # ==========================================
 @keras.saving.register_keras_serializable()
 class GraphConvLayer(layers.Layer):
     def __init__(self, num_outputs, adj_matrix, **kwargs):
         super().__init__(**kwargs)
         self.num_outputs = num_outputs
+        self.adj_matrix = adj_matrix 
         
-        # Normalización: D^-1 * A
+        # Normalización de la matriz de adyacencia
         row_sum = np.array(adj_matrix.sum(1))
         d_inv = np.power(row_sum, -1.0).flatten()
         d_inv[np.isinf(d_inv)] = 0.
         adj_norm = np.diag(d_inv).dot(adj_matrix).astype("float32")
-        
         self.adj = ops.convert_to_tensor(adj_norm)
 
     def build(self, input_shape):
         self.kernel = self.add_weight(
-            name="kernel",
-            shape=(input_shape[-1], self.num_outputs),
-            initializer="glorot_uniform",
-            trainable=True,
+            name="kernel", shape=(input_shape[-1], self.num_outputs),
+            initializer="glorot_uniform", trainable=True
         )
 
     def call(self, inputs):
-        # Propagación Espacial: A * X
         x = ops.matmul(self.adj, inputs)
-        # Transformación: (A*X) * W
         return ops.matmul(x, self.kernel)
 
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], self.num_outputs)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "num_outputs": self.num_outputs,
+            "adj_matrix": self.adj_matrix,
+        })
+        return config
+
 # ==========================================
-# 2. FUNCIONES DE APOYO Y MÉTRICAS
+# 2. FUNCIÓN DE MÉTRICAS (IGUAL QUE EN LOS OTROS MODELOS)
 # ==========================================
 def calcular_metricas(y_true, y_pred, nombre_set):
-    """Mismas métricas que Baseline y Red Neuronal para comparación justa."""
+    """Calcula el pack de métricas estándar del proyecto."""
     mae = np.mean(np.abs(y_true - y_pred))
     rmse = np.sqrt(np.mean(np.square(y_true - y_pred)))
     
+    # R2 Score
     ss_res = np.sum(np.square(y_true - y_pred))
     ss_tot = np.sum(np.square(y_true - np.mean(y_true)))
     r2 = 1 - (ss_res / (ss_tot + 1e-8))
     
     bias = np.mean(y_pred - y_true)
+    
+    # MAPE con protección contra división por cero
     mape = np.mean(np.abs((y_true - y_pred) / (y_true + 1e-8))) * 100
     
     return {
@@ -88,48 +79,102 @@ def calcular_metricas(y_true, y_pred, nombre_set):
     }
 
 # ==========================================
-# 3. CONSTRUCCIÓN DEL MODELO ST-GCN
+# 3. PREPARACIÓN DE DATOS
 # ==========================================
-def build_stgcn(num_nodes, num_features, adj_matrix):
-    inputs = layers.Input(shape=(num_nodes, num_features), name="input_grafos")
+def preparar_datos_grafo(df, scaler=None):
+    df_data = df.copy()
+    num_nodos_esperados = 262 
     
-    # Bloques GCN
-    x = GraphConvLayer(64, adj_matrix, name="gcn_1")(inputs)
-    x = layers.Activation("relu")(x)
-    x = layers.BatchNormalization()(x)
+    features_cols = [
+        'temp_c', 'precipitation', 'viento_kmh', 'lluvia', 'nieve', 
+        'hay_lluvia', 'hay_nieve', 'es_festivo', 'num_eventos', 
+        'dia_semana', 'es_fin_semana', 'hora_sen', 'hora_cos'
+    ]
     
-    x = GraphConvLayer(32, adj_matrix, name="gcn_2")(x)
-    x = layers.Activation("relu")(x)
-    x = layers.Dropout(0.2)(x)
+    if scaler is None:
+        scaler = StandardScaler()
+        df_data[features_cols] = scaler.fit_transform(df_data[features_cols])
+    else:
+        df_data[features_cols] = scaler.transform(df_data[features_cols])
+
+    X_raw = df_data[features_cols].values
+    y_raw = df_data['velocidad_mph'].values
     
-    # Reducción y Predicción
-    x = layers.Flatten()(x)
-    x = layers.Dense(256, activation="relu")(x)
-    x = layers.Dense(128, activation="relu")(x)
+    num_muestras = len(X_raw) // num_nodos_esperados
+    X = X_raw[:num_muestras * num_nodos_esperados].reshape(num_muestras, num_nodos_esperados, -1)
+    y = y_raw[:num_muestras * num_nodos_esperados].reshape(num_muestras, num_nodos_esperados)
     
-    outputs = layers.Dense(num_nodes, name="prediccion_velocidad")(x)
-    
-    model = keras.Model(inputs=inputs, outputs=outputs)
-    model.compile(optimizer='adam', loss='mae', metrics=['mse'])
-    
-    return model
+    return X, y, scaler
 
 # ==========================================
-# 4. LÓGICA DE EJECUCIÓN
+# 4. EJECUCIÓN PRINCIPAL
 # ==========================================
-if __name__ == "__main__":
-    ADJ_PATH = os.path.join(DATA_DIR, 'adj_matrix.npy')
+def ejecutar_stgcn():
+    print("🚀 Iniciando entrenamiento y evaluación completa ST-GCN...")
     
-    if os.path.exists(ADJ_PATH):
-        adj = np.load(ADJ_PATH)
-        n_nodos = adj.shape[0]
-        n_features = 13 # El mismo número de variables que el Baseline/Red Neuronal
+    # 1. CARGA DE DATOS
+    # Cargamos Train, Val y Test para tener la comparativa completa
+    train_df = pd.read_parquet(os.path.join(DATA_DIR, 'train_p4.parquet'))
+    val_df = pd.read_parquet(os.path.join(DATA_DIR, 'val_p4.parquet'))
+    test_df = pd.read_parquet(os.path.join(DATA_DIR, 'test_p4.parquet'))
+    adj = np.load(os.path.join(DATA_DIR, 'adj_matrix.npy'))
+    
+    # 2. PREPARACIÓN (Cubo de datos: Muestras, 262, 13)
+    # Importante: El scaler se ajusta con Train y se aplica a Val y Test
+    X_train, y_train, scaler = preparar_datos_grafo(train_df)
+    X_val, y_val, _ = preparar_datos_grafo(val_df, scaler)
+    X_test, y_test, _ = preparar_datos_grafo(test_df, scaler)
+
+    # 3. CONSTRUCCIÓN DEL MODELO
+    inputs = layers.Input(shape=(X_train.shape[1], X_train.shape[2]))
+    x = GraphConvLayer(64, adj)(inputs)
+    x = layers.Activation("relu")(x)
+    x = layers.BatchNormalization()(x)
+    x = GraphConvLayer(32, adj)(x)
+    x = layers.Flatten()(x)
+    x = layers.Dense(128, activation="relu")(x)
+    outputs = layers.Dense(X_train.shape[1])(x)
+    
+    model = keras.Model(inputs, outputs)
+    model.compile(optimizer='adam', loss='mae')
+
+    # 4. ENTRENAMIENTO
+    # Ya no necesitamos validation_split porque evaluaremos con el set de Val real
+    print("Entrenando modelo...")
+    model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=1)
+
+    # 5. PREDICCIONES PARA EVALUACIÓN
+    print("\nCalculando métricas finales para Validación y Test...")
+    y_pred_val = model.predict(X_val)
+    y_pred_test = model.predict(X_test)
+    
+    # 6. APLANAR DATOS (Necesario para las fórmulas de métricas globales)
+    # Validación
+    y_val_true_flat = y_val.flatten()
+    y_val_pred_flat = y_pred_val.flatten()
+    # Test
+    y_test_true_flat = y_test.flatten()
+    y_test_pred_flat = y_pred_test.flatten()
+
+    # 7. CÁLCULO DE MÉTRICAS OFICIALES
+    metrics_val = calcular_metricas(y_val_true_flat, y_val_pred_flat, "val")
+    metrics_test = calcular_metricas(y_test_true_flat, y_test_pred_flat, "test")
+    
+    # 8. ESTRUCTURA DEL JSON FINAL
+    resultados_finales = {
+        "model_name": "ST-GCN_Spatial_Temporal",
+        **metrics_val,
+        **metrics_test
+    }
+    
+    # 9. GUARDADO DE RESULTADOS Y MODELO
+    with open(os.path.join(RESULTS_DIR, 'stgcn_results.json'), 'w') as f:
+        json.dump(resultados_finales, f, indent=4)
         
-        print(f"--- Arquitectura ST-GCN lista (Backend: {keras.backend.backend()}) ---")
-        model = build_stgcn(n_nodos, n_features, adj)
-        model.summary()
-        
-        # Nota: Aquí falta la lógica del generador de datos para entrenamiento real
-        print("\n✅ Estructura preparada y lista para recibir el generador de datos.")
-    else:
-        print(f"❌ Error: Matriz no encontrada en {ADJ_PATH}")
+    model.save(os.path.join(RESULTS_DIR, 'stgcn_model.keras'))
+    
+    print(f"\n✅ Proceso completado con éxito.")
+    print(f"Resultados guardados en: {os.path.join(RESULTS_DIR, 'stgcn_results.json')}")
+
+if __name__ == "__main__":
+    ejecutar_stgcn()
