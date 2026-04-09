@@ -136,8 +136,8 @@ def entrenar_red_embeddings():
     history = model.fit(
         [X_zone_train, X_num_train], y_train,
         validation_data=([X_zone_val, X_num_val], y_val),
-        epochs=30,
-        batch_size=1024,
+        epochs=15,
+        batch_size=4096,
         callbacks=[early_stop],
         verbose=1
     )
