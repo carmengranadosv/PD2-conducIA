@@ -10,19 +10,47 @@ import pyarrow.parquet as pq
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
-DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'problema5')
-RESULTS_DIR = os.path.join(DATA_DIR, 'results') # Aquí guardamos los resulados de las métricas
+DATA_DIR = BASE_DIR / 'data' / 'processed' / 'tlc_clean' / 'problema5'
+MODELS_DIR = BASE_DIR / 'models' / 'problema5'
+REPORTS_DIR = BASE_DIR / 'reports' / 'problema5'
 
-os.makedirs(RESULTS_DIR, exist_ok=True)
+# Crear directorios si no existen
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-TRAIN_FILE = os.path.join(DATA_DIR, 'train.parquet')
-VAL_FILE = os.path.join(DATA_DIR, 'val.parquet')
-TEST_FILE = os.path.join(DATA_DIR, 'test.parquet')
+TRAIN_FILE = DATA_DIR / 'train.parquet'
+VAL_FILE = DATA_DIR / 'val.parquet'
+TEST_FILE = DATA_DIR / 'test.parquet'
+
+def optimizar_tipos(df):
+    """Reduce el uso de memoria convirtiendo tipos de datos."""
+    for col in df.select_dtypes(include=['float64']).columns:
+        df[col] = df[col].astype('float32')
+    for col in df.select_dtypes(include=['int64']).columns:
+        df[col] = df[col].astype('int32')
+    return df
+
+def leer_datos_optimizados(ruta, sample_size=2000000):
+    """Lee el archivo por fragmentos o aplica un muestreo para no saturar la RAM."""
+    print(f"Leyendo {ruta.name}...")
+    # Leemos metadatos para saber el total
+    parquet_file = pq.ParquetFile(ruta)
+    total_rows = parquet_file.metadata.num_rows
+    
+    # Si es excesivo, tomamos una muestra aleatoria del 10% o un tope fijo
+    # Esto garantiza que el modelo vea variedad sin explotar la RAM
+    if total_rows > sample_size:
+        print(f"  Archivo muy grande ({total_rows:,} filas). Muestreando {sample_size:,}...")
+        df = pd.read_parquet(ruta).sample(n=sample_size, random_state=42)
+    else:
+        df = pd.read_parquet(ruta)
+    
+    return optimizar_tipos(df)
 
 # Función para calcular la importancia de las variables
 def extraer_importancia_lr(pipeline, col_num, col_cat):
@@ -59,10 +87,10 @@ def calcular_metricas(y_true, y_pred, nombre_set):
 def entrenar_baseline():
     print("Iniciando entrenamiento del Baseline (Regresión Lineal)...")
 
-    # Solo leemos el primer grupo de filas 
-    df_train = pq.ParquetFile(TRAIN_FILE).read_row_group(0).to_pandas()
-    df_val = pq.ParquetFile(VAL_FILE).read_row_group(0).to_pandas()
-    df_test = pq.ParquetFile(TEST_FILE).read_row_group(0).to_pandas()
+    # CARGA DE DATOS (Muestreo para Baseline)
+    df_train = leer_datos_optimizados(TRAIN_FILE, sample_size=28000000)
+    df_val = leer_datos_optimizados(VAL_FILE, sample_size=6000000)
+    df_test = leer_datos_optimizados(TEST_FILE, sample_size=6000000)
 
     # SEPARAR X e y (Variable Objetivo: propina)
     columnas_a_ignorar = ['propina', 'origen_id', 'destino_id', 'destino_zona', 'destino_barrio']
@@ -106,7 +134,7 @@ def entrenar_baseline():
     # CREAR EL PIPELINE FINAL
     pipeline_lr = Pipeline(steps=[
         ('preprocesamiento', preprocesador),
-        ('modelo', LinearRegression())
+        ('modelo', Ridge(alpha=1.0))
     ])
 
     # ENTRENAMIENTO
@@ -115,7 +143,7 @@ def entrenar_baseline():
 
     # IMPORTANCIA
     df_importancia = extraer_importancia_lr(pipeline_lr, columnas_numericas, columnas_categoricas)
-    df_importancia.to_csv(os.path.join(RESULTS_DIR, 'baseline_features.csv'), index=False)
+    df_importancia.to_csv(os.path.join(REPORTS_DIR, 'baseline_features.csv'), index=False)
 
     # EVALUACIÓN SOBRE VALIDACIÓN Y TEST
     print("Calculando las métricas en validación y test...")
@@ -124,18 +152,23 @@ def entrenar_baseline():
 
     # Unificar resultados
     resultados = {
-        "model_name": "Baseline_LinearRegression",
+        "model_name": "Baseline_Ridge",
+        "data_info": {
+            "train_samples": len(X_train),
+            "val_samples": len(X_val),
+            "test_samples": len(X_test)
+        },
         **metrics_val,
         **metrics_test
     }
 
     # GUARDAR RESULTADOS EN JSON
-    res_path = os.path.join(RESULTS_DIR, 'baseline_results.json')
+    res_path = os.path.join(REPORTS_DIR, 'baseline_results.json')
     with open(res_path, 'w') as f:
         json.dump(resultados, f, indent=4)
     
     # GUARDAR MODELO ENTRENADO
-    joblib.dump(pipeline_lr, os.path.join(RESULTS_DIR, 'baseline_model.joblib'))
+    joblib.dump(pipeline_lr, os.path.join(MODELS_DIR, 'baseline_model.joblib'))
 
     print("\nEvaluación en TEST finalizada:")
     print(f"  MAE:  ${resultados['test_mae']:.4f}")

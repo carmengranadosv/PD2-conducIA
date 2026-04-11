@@ -3,6 +3,7 @@ import numpy as np
 import os
 import json
 import joblib
+import gc
 from pathlib import Path
 import pyarrow.parquet as pq
 
@@ -15,29 +16,51 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
-DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'problema5')
-RESULTS_DIR = os.path.join(DATA_DIR, 'results')
+DATA_DIR = BASE_DIR / 'data' / 'processed' / 'tlc_clean' / 'problema5'
+MODELS_DIR = BASE_DIR / 'models' / 'problema5'
+REPORTS_DIR = BASE_DIR / 'reports' / 'problema5'
 
-os.makedirs(RESULTS_DIR, exist_ok=True)
+# Asegurar directorios
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-TRAIN_FILE = os.path.join(DATA_DIR, 'train.parquet')
-VAL_FILE = os.path.join(DATA_DIR, 'val.parquet')
-TEST_FILE = os.path.join(DATA_DIR, 'test.parquet') 
+TRAIN_FILE = DATA_DIR / 'train.parquet'
+VAL_FILE = DATA_DIR / 'val.parquet'
+TEST_FILE = DATA_DIR / 'test.parquet'
+
+def optimizar_tipos(df):
+    for col in df.select_dtypes(include=['float64']).columns:
+        df[col] = df[col].astype('float32')
+    for col in df.select_dtypes(include=['int64']).columns:
+        df[col] = df[col].astype('int32')
+    return df
+
+def leer_datos_finales(ruta, sample_size):
+    print(f"Leyendo {ruta.name}...")
+    parquet_file = pq.ParquetFile(ruta)
+    total_rows = parquet_file.metadata.num_rows
+    
+    if total_rows > sample_size:
+        print(f"  Archivo muy grande ({total_rows:,} filas). Muestreando {sample_size:,}...")
+        df = pd.read_parquet(ruta).sample(n=sample_size, random_state=42)
+    else:
+        df = pd.read_parquet(ruta)
+    return optimizar_tipos(df)
 
 def calcular_metricas(y_true, y_pred, nombre_set):
-    # Convertimos a series de pandas para facilitar el filtrado si vienen como arrays
-    y_true_s = pd.Series(y_true)
-    y_pred_s = pd.Series(y_pred)
+    # Convertimos a NumPy para evitar desalineación de índices por el muestreo
+    y_true = np.array(y_true).flatten()
+    y_pred = np.array(y_pred).flatten()
     
     mae = mean_absolute_error(y_true, y_pred)
     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
     r2 = r2_score(y_true, y_pred)
     bias = np.mean(y_pred - y_true)
     
-    # Solo lo calculamos donde la propina es mayor a 0.50$
-    mask = y_true_s > 0.5
-    if mask.any():
-        mape = np.mean(np.abs((y_true_s[mask] - y_pred_s[mask]) / y_true_s[mask])) * 100
+    # MAPE: Solo sobre propinas significativas (> 0.5$)
+    mask = y_true > 0.5
+    if np.any(mask):
+        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
     else:
         mape = 0.0
     
@@ -54,13 +77,15 @@ def evaluacion_final():
 
     # 1. LEER TODOS LOS DATOS (El primer bloque de cada uno)
     print("Leyendo todos los datos...")
-    df_train = pq.ParquetFile(TRAIN_FILE).read_row_group(0).to_pandas()
-    df_val = pq.ParquetFile(VAL_FILE).read_row_group(0).to_pandas()
-    df_test = pq.ParquetFile(TEST_FILE).read_row_group(0).to_pandas() # El examen final
+    df_train = leer_datos_finales(TRAIN_FILE, 28_000_000)
+    df_val = leer_datos_finales(VAL_FILE, 6_000_000)
+    df_test = leer_datos_finales(TEST_FILE, 6_000_000)
 
     # 2. JUNTAR TRAIN Y VAL (Maximizando el conocimiento)
     print("Combinando Train y Validación para el reentrenamiento...")
     df_total_train = pd.concat([df_train, df_val], ignore_index=True)
+    del df_train, df_val
+    gc.collect()
 
     # 3. SEPARAR X e y (Siguiendo la lógica "Pre-viaje" del profesor)
     columnas_a_ignorar = [
@@ -76,7 +101,8 @@ def evaluacion_final():
     X_train_final, y_train_final = prepare_xy(df_total_train)
     X_test, y_test = prepare_xy(df_test)
 
-    print(f"Entrenando al Campeón con {len(X_train_final):,} registros. Evaluando sobre {len(X_test):,} registros.")
+    del df_total_train, df_test
+    gc.collect()
 
     # 4. DEFINIR COLUMNAS
     columnas_categoricas = [
@@ -89,7 +115,7 @@ def evaluacion_final():
     preprocesador = ColumnTransformer(
         transformers=[
             ('num', StandardScaler(), columnas_numericas),
-            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), columnas_categoricas)
+            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=True), columnas_categoricas)
         ],
         remainder='passthrough'
     )
@@ -97,9 +123,9 @@ def evaluacion_final():
     pipeline_xgb_final = Pipeline(steps=[
         ('preprocesamiento', preprocesador),
         ('modelo', XGBRegressor(
-            n_estimators=200,      
+            n_estimators=250,      
             learning_rate=0.1,     
-            max_depth=7,           
+            max_depth=8,           
             subsample=0.8,         
             colsample_bytree=0.8,  
             random_state=42,
@@ -140,7 +166,9 @@ def evaluacion_final():
         "mape": float(mape)
     }
     
-    with open(os.path.join(RESULTS_DIR, 'final_test_metrics.json'), 'w') as f:
+    with open(os.path.join(REPORTS_DIR, 'final_test_metrics.json'), 'w') as f:
         json.dump(final_metrics, f, indent=4)
+
+    joblib.dump(pipeline_xgb_final, MODELS_DIR / 'model_final.joblib')
 if __name__ == "__main__":
     evaluacion_final()

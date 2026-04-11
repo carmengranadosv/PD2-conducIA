@@ -3,6 +3,7 @@ import numpy as np
 import os
 import json
 import joblib
+import gc
 from pathlib import Path
 import pyarrow.parquet as pq
 
@@ -15,22 +16,55 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parents[3] 
-DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed', 'tlc_clean', 'problema5')
-RESULTS_DIR = os.path.join(DATA_DIR, 'results')
 
-os.makedirs(RESULTS_DIR, exist_ok=True)
+DATA_DIR = BASE_DIR / 'data' / 'processed' / 'tlc_clean' / 'problema5'
+MODELS_DIR = BASE_DIR / 'models' / 'problema5'
+REPORTS_DIR = BASE_DIR / 'reports' / 'problema5'
 
-TRAIN_FILE = os.path.join(DATA_DIR, 'train.parquet')
-VAL_FILE = os.path.join(DATA_DIR, 'val.parquet')
-TEST_FILE = os.path.join(DATA_DIR, 'test.parquet')
+# Crear directorios
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+TRAIN_FILE = DATA_DIR / 'train.parquet'
+VAL_FILE = DATA_DIR / 'val.parquet'
+TEST_FILE = DATA_DIR / 'test.parquet'
+
+def optimizar_tipos(df):
+    """Reduce el uso de memoria convirtiendo tipos de datos a 32 bits."""
+    for col in df.select_dtypes(include=['float64']).columns:
+        df[col] = df[col].astype('float32')
+    for col in df.select_dtypes(include=['int64']).columns:
+        df[col] = df[col].astype('int32')
+    return df
+
+def leer_datos_optimizados(ruta, sample_size):
+    """Lee el archivo con muestreo aleatorio para no colapsar la RAM."""
+    print(f"Leyendo {ruta.name}...")
+    parquet_file = pq.ParquetFile(ruta)
+    total_rows = parquet_file.metadata.num_rows
+    
+    if total_rows > sample_size:
+        print(f"  Archivo muy grande ({total_rows:,} filas). Muestreando {sample_size:,}...")
+        df = pd.read_parquet(ruta).sample(n=sample_size, random_state=42)
+    else:
+        df = pd.read_parquet(ruta)
+    
+    return optimizar_tipos(df)
 
 def calcular_metricas(y_true, y_pred, nombre_set):
+    y_true = np.array(y_true).flatten()
+    y_pred = np.array(y_pred).flatten()
+    
     mae = mean_absolute_error(y_true, y_pred)
     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
     r2 = r2_score(y_true, y_pred)
     bias = np.mean(y_pred - y_true)
-    epsilon = 1e-8
-    mape = np.mean(np.abs((y_true - y_pred) / (y_true + epsilon))) * 100
+    
+    mask = y_true > 0.5
+    if np.any(mask):
+        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+    else:
+        mape = 0.0
     
     return {
         f"{nombre_set}_mae": float(mae),
@@ -60,9 +94,9 @@ def entrenar_xgboost():
 
     # 1. LEER DATOS (Modo eficiente)
     print("Leyendo datos...")
-    df_train = pq.ParquetFile(TRAIN_FILE).read_row_group(0).to_pandas()
-    df_val = pq.ParquetFile(VAL_FILE).read_row_group(0).to_pandas()
-    df_test = pq.ParquetFile(TEST_FILE).read_row_group(0).to_pandas()
+    df_train = leer_datos_optimizados(TRAIN_FILE, sample_size=28000000)
+    df_val = leer_datos_optimizados(VAL_FILE, sample_size=6000000)
+    df_test = leer_datos_optimizados(TEST_FILE, sample_size=6000000)
 
     # 2. SEPARAR X e y
     columnas_a_ignorar = ['propina', 'origen_id', 'destino_id', 'destino_zona', 'destino_barrio']
@@ -76,7 +110,8 @@ def entrenar_xgboost():
     X_val, y_val = prepare_xy(df_val)
     X_test, y_test = prepare_xy(df_test)
 
-    print(f"Datos: Train({len(X_train)}), Val({len(X_val)}), Test({len(X_test)})")
+    del df_train, df_val, df_test
+    gc.collect()
 
     # 3. DEFINIR COLUMNAS POR TIPO
     columnas_categoricas = [
@@ -94,7 +129,7 @@ def entrenar_xgboost():
     preprocesador = ColumnTransformer(
         transformers=[
             ('num', StandardScaler(), columnas_numericas),
-            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), columnas_categoricas)
+            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=True), columnas_categoricas)
         ],
         remainder='passthrough'
     )
@@ -121,7 +156,7 @@ def entrenar_xgboost():
 
     # 7. IMPORTANCIA DE VARIABLES
     df_importancia = extraer_importancia_xgb(pipeline_xgb, columnas_numericas, columnas_categoricas)
-    df_importancia.to_csv(os.path.join(RESULTS_DIR, 'xgboost_features.csv'), index=False)
+    df_importancia.to_csv(REPORTS_DIR / 'xgboost_features.csv', index=False)
     print("\nTOP 5 Variables para XGBoost:")
     print(df_importancia.head(5).to_string(index=False))
 
@@ -131,18 +166,23 @@ def entrenar_xgboost():
     metrics_test = calcular_metricas(y_test, pipeline_xgb.predict(X_test), "test")
 
     resultados = {
-        "model_name": "XGBoost_Regressor",
+        "model_name": "XGBoost",
+        "data_info": {
+            "train_samples": len(y_train),
+            "val_samples": len(y_val),
+            "test_samples": len(y_test)
+        },
         **metrics_val,
         **metrics_test
     }
 
     # 8. GUARDAR RESULTADOS
-    res_path = os.path.join(RESULTS_DIR, 'xgboost_results.json')
+    res_path = os.path.join(REPORTS_DIR, 'xgboost_results.json')
     with open(res_path, 'w') as f:
         json.dump(resultados, f, indent=4)
 
-    joblib.dump(pipeline_xgb, os.path.join(RESULTS_DIR, 'xgboost_model.joblib'))
-    
+    joblib.dump(pipeline_xgb, os.path.join(MODELS_DIR, 'xgboost_model.joblib'))
+
     print("\n" + "="*45)
     print("REPORTE XGBOOST")
     print(f"  MAE:  ${resultados['test_mae']:.4f}")
