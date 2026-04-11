@@ -217,3 +217,7 @@ data/
 # Por seguridad, ignora cualquier parquet/csv pesado donde sea que esté
 *.parquet
 *.csv
+
+# Ignorar archivos que contienen los modelos y los resultados de los modelos
+models/
+reports/
