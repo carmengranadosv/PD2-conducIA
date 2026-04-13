@@ -23,8 +23,6 @@ FLUJO DE TRABAJO:
        el error porcentual no se distorsione por paradas de tráfico.
     7. PERSISTENCIA: Genera el archivo final 'final_test_metrics.json' con los 
        resultados definitivos para la memoria del proyecto.
-
-NOTA IMPORTANTE: cambiar el modelo cargado en la sección 4 si veo que el campeón es otro
 """
 
 import pandas as pd
