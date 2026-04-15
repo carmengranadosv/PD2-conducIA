@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ConducIA - Documentación</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
+        .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
+        .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
+        .main-nav a.active { background: #e63946; color: white; }
+        .doc-section { background: white; padding: 30px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
+    <nav class="main-nav">
+        <a href="index.html" class="nav-logo">ConducIA</a>
+        <a href="index.html">Inicio</a>
+        <a href="taxi.html">Panel Taxi</a>
+        <a href="vtc.html">Panel VTC</a>
+        <a href="documentacion.html" class="active">Documentación</a>
+    </nav>
+
+    <div class="main-wrapper" style="max-width: 900px; margin: auto; padding-top: 50px;">
+        <section class="doc-section">
+            <h2>Anticipación Inteligente (Smart Positioning)</h2>
+            <p>Utilizamos <strong>Random Forest</strong> para explicar el 94.4% de la varianza de la demanda horaria[cite: 142, 174].</p>
+        </section>
+        <section class="doc-section">
+            <h2>Optimización de Zona (Success-Driven Logic)</h2>
+            <p>Nuestra Red Neuronal (MLP) identifica zonas "TOP" con un AUC-ROC de 0.9455[cite: 229, 251].</p>
+        </section>
+        <section class="doc-section">
+            <h2>Maximización de Propinas (Tip Maximizer)</h2>
+            <p>El modelo <strong>XGBoost</strong> predice propinas con un MAE de $1.45 y un R² de 0.42[cite: 368, 370].</p>
+        </section>
+    </div>
+</body>
+</html>

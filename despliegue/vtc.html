@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ConducIA - Panel VTC</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
+        .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
+        .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
+        .main-nav a.active { background: #e63946; color: white; }
+        .nav-logo { font-weight: 700; font-size: 1.2rem; color: #222 !important; margin-right: 20px; }
+        .form-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 40px auto; }
+        .btn-audit { background: #222; color: white; border: none; padding: 15px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
+    <nav class="main-nav">
+        <a href="index.html" class="nav-logo">ConducIA</a>
+        <a href="index.html">Inicio</a>
+        <a href="taxi.html">Panel Taxi</a>
+        <a href="vtc.html" class="active">Panel VTC</a>
+        <a href="documentacion.html">Documentación</a>
+    </nav>
+
+    <div class="main-wrapper">
+        <header style="text-align: center; margin-top: 50px;">
+            <h1>Tip Maximizer (VTC)</h1>
+            <div class="linea-roja" style="margin: 10px auto;"></div>
+            <p>Auditoría de propinas con XGBoost (MAE: $1.45)[cite: 370].</p>
+        </header>
+
+        <div class="form-container">
+            <label>Tarifa Total Estimada ($)</label>
+            <input type="number" style="width:100%; padding:10px; margin-bottom:20px;" placeholder="Ej: 25.00">
+            <button class="btn-audit" onclick="alert('💰 PROPINA ESTIMADA: $4.25 (Modelo XGBoost) [cite: 368]')">AUDITAR VIAJE</button>
+        </div>
+    </div>
+</body>
+</html>

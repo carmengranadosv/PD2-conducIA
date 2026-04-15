@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConducIA - Inicio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
+        .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
+        .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
+        .main-nav a:hover { color: #e63946; background: rgba(230, 57, 70, 0.05); }
+        .main-nav a.active { background: #e63946; color: white; box-shadow: 0 4px 10px rgba(230, 57, 70, 0.2); }
+        .nav-logo { font-weight: 700; font-size: 1.2rem; color: #222 !important; margin-right: 20px; }
+        .profile-container { display: flex; gap: 25px; margin-top: 40px; justify-content: center; flex-wrap: wrap; }
+        .profile-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 320px; transition: transform 0.3s ease; text-align: left; border-top: 5px solid #e63946; }
+        .profile-card:hover { transform: translateY(-10px); }
+        .btn-profile { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #222; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
+    <nav class="main-nav">
+        <a href="index.html" class="nav-logo">ConducIA</a>
+        <a href="index.html" class="active">Inicio</a>
+        <a href="taxi.html">Panel Taxi</a>
+        <a href="vtc.html">Panel VTC</a>
+        <a href="documentacion.html">Documentación</a>
+    </nav>
+
+    <div class="main-wrapper main-centrado">
+        <header class="hero-section">
+            <h1 class="proyecto-titulo">ConducIA</h1>
+            <div class="linea-roja"></div>
+            <p class="resumen-proyecto">
+                Optimizamos la movilidad urbana en NYC mediante modelos predictivos para maximizar el beneficio por hora del conductor.
+            </p>
+        </header>
+
+        <div class="profile-container">
+            <div class="profile-card">
+                <h3>Servicio de Taxi</h3>
+                <p>¿Destino desconocido? Anticipamos la demanda en tu zona actual mediante <strong>Smart Positioning</strong>.</p>
+                <a href="taxi.html" class="btn-profile">ANALIZAR MI ZONA</a>
+            </div>
+            <div class="profile-card">
+                <h3>Servicio VTC</h3>
+                <p>¿Viaje entrante? Auditamos la rentabilidad y propina estimada con nuestro <strong>Tip Maximizer</strong>.</p>
+                <a href="vtc.html" class="btn-profile">EVALUAR VIAJE</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
