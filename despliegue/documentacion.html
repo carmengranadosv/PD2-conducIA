@@ -3,38 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <title>ConducIA - Documentación</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <style>
         .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
         .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
         .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
         .main-nav a.active { background: #e63946; color: white; }
-        .doc-section { background: white; padding: 30px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .doc-wrapper { max-width: 1000px; margin: 40px auto; background: white; padding: 50px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.05); }
+        .linea-roja { width: 50px; height: 3px; background: #e63946; margin: 15px 0; }
+        .caja-resumen { border-left: 5px solid #222; background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 0 10px 10px 0; }
+        .badge { background: #e63946; color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
     <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
     <nav class="main-nav">
-        <a href="index.html" class="nav-logo">ConducIA</a>
         <a href="index.html">Inicio</a>
         <a href="taxi.html">Panel Taxi</a>
         <a href="vtc.html">Panel VTC</a>
         <a href="documentacion.html" class="active">Documentación</a>
     </nav>
+    <div class="doc-wrapper">
+        <p style="text-transform: uppercase; color: #999; letter-spacing: 2px;">Memoria Técnica</p>
+        <h1>Modelos Predictivos</h1>
+        <div class="linea-roja"></div>
 
-    <div class="main-wrapper" style="max-width: 900px; margin: auto; padding-top: 50px;">
-        <section class="doc-section">
-            <h2>Anticipación Inteligente (Smart Positioning)</h2>
-            <p>Utilizamos <strong>Random Forest</strong> para explicar el 94.4% de la varianza de la demanda horaria[cite: 142, 174].</p>
+        <section id="pos">
+            <h2>1. Smart Positioning <span class="badge">Random Forest</span></h2>
+            <div class="caja-resumen">Predice la demanda por zona con un <strong>R² de 0.944</strong>. Analiza la necesidad de servicio sin conocer el destino.</div>
         </section>
-        <section class="doc-section">
-            <h2>Optimización de Zona (Success-Driven Logic)</h2>
-            <p>Nuestra Red Neuronal (MLP) identifica zonas "TOP" con un AUC-ROC de 0.9455[cite: 229, 251].</p>
+
+        <section id="success">
+            <h2>2. Success-Driven Logic <span class="badge">MLP</span></h2>
+            <div class="caja-resumen">Clasificación de zonas rentables (Top 33%) con un <strong>AUC-ROC de 0.945</strong>. Reduce esperas innecesarias.</div>
         </section>
-        <section class="doc-section">
-            <h2>Maximización de Propinas (Tip Maximizer)</h2>
-            <p>El modelo <strong>XGBoost</strong> predice propinas con un MAE de $1.45 y un R² de 0.42[cite: 368, 370].</p>
+
+        <section id="tip">
+            <h2>3. Tip Maximizer <span class="badge">XGBoost</span></h2>
+            <div class="caja-resumen">Predicción de propinas con un <strong>R² de 0.42</strong>. Motor principal de rentabilidad para servicios VTC.</div>
+        </section>
+
+        <section id="nav">
+            <h2>4. Eficiencia y Clima <span class="badge">XGBoost Nav</span></h2>
+            <div class="caja-resumen">Audita la velocidad media y el tráfico según condiciones climáticas. Permite evitar zonas de alta congestión para maximizar viajes por hora.</div>
         </section>
     </div>
 </body>

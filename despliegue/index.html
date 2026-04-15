@@ -12,44 +12,45 @@
         .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
         .main-nav a:hover { color: #e63946; background: rgba(230, 57, 70, 0.05); }
         .main-nav a.active { background: #e63946; color: white; box-shadow: 0 4px 10px rgba(230, 57, 70, 0.2); }
-        .nav-logo { font-weight: 700; font-size: 1.2rem; color: #222 !important; margin-right: 20px; }
-        .profile-container { display: flex; gap: 25px; margin-top: 40px; justify-content: center; flex-wrap: wrap; }
-        .profile-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 320px; transition: transform 0.3s ease; text-align: left; border-top: 5px solid #e63946; }
-        .profile-card:hover { transform: translateY(-10px); }
-        .btn-profile { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #222; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 0.85rem; }
+        .hero-section { text-align: center; padding: 60px 20px; }
+        .proyecto-titulo { font-size: 4rem; font-weight: 700; margin-bottom: 10px; }
+        .linea-roja { width: 80px; height: 4px; background: #e63946; margin: 0 auto 20px; }
+        .subtitulo { font-size: 1.5rem; color: #777; font-weight: 300; margin-bottom: 30px; }
+        .profile-container { display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+        .profile-card { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); width: 350px; text-align: center; border-bottom: 4px solid #e63946; }
+        .btn-main { display: inline-block; background: #222; color: white; padding: 15px 30px; text-decoration: none; border-radius: 30px; font-weight: bold; margin-top: 20px; transition: 0.3s; }
+        .btn-main:hover { background: #e63946; transform: translateY(-3px); }
     </style>
 </head>
 <body>
     <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
     <nav class="main-nav">
-        <a href="index.html" class="nav-logo">ConducIA</a>
         <a href="index.html" class="active">Inicio</a>
         <a href="taxi.html">Panel Taxi</a>
         <a href="vtc.html">Panel VTC</a>
         <a href="documentacion.html">Documentación</a>
     </nav>
-
-    <div class="main-wrapper main-centrado">
-        <header class="hero-section">
+    <div class="main-wrapper">
+        <section class="hero-section">
             <h1 class="proyecto-titulo">ConducIA</h1>
             <div class="linea-roja"></div>
-            <p class="resumen-proyecto">
-                Optimizamos la movilidad urbana en NYC mediante modelos predictivos para maximizar el beneficio por hora del conductor.
+            <h2 class="subtitulo">Intelligence for Urban Mobility</h2>
+            <p style="max-width: 800px; margin: 0 auto 40px; color: #555; line-height: 1.8;">
+                Auditoría en tiempo real de eficiencia, clima y rentabilidad. Optimizamos cada decisión mediante modelos de Machine Learning entrenados con datos reales de la ciudad de Nueva York.
             </p>
-        </header>
-
-        <div class="profile-container">
-            <div class="profile-card">
-                <h3>Servicio de Taxi</h3>
-                <p>¿Destino desconocido? Anticipamos la demanda en tu zona actual mediante <strong>Smart Positioning</strong>.</p>
-                <a href="taxi.html" class="btn-profile">ANALIZAR MI ZONA</a>
+            <div class="profile-container">
+                <div class="profile-card">
+                    <h3>Soy Taxista</h3>
+                    <p>Predicción de demanda y análisis de tráfico para optimizar tu posicionamiento estratégico.</p>
+                    <a href="taxi.html" class="btn-main">Entrar Panel Taxi</a>
+                </div>
+                <div class="profile-card">
+                    <h3>Soy VTC</h3>
+                    <p>Evaluación de trayectos, estimación de propinas y auditoría de navegación eficiente.</p>
+                    <a href="vtc.html" class="btn-main">Entrar Panel VTC</a>
+                </div>
             </div>
-            <div class="profile-card">
-                <h3>Servicio VTC</h3>
-                <p>¿Viaje entrante? Auditamos la rentabilidad y propina estimada con nuestro <strong>Tip Maximizer</strong>.</p>
-                <a href="vtc.html" class="btn-profile">EVALUAR VIAJE</a>
-            </div>
-        </div>
+        </section>
     </div>
 </body>
 </html>
