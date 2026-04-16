@@ -13,15 +13,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_INPUTS = [
-    PROJECT_ROOT / "data/processed/tlc_clean/problema1/features/train.parquet",
-    PROJECT_ROOT / "data/processed/tlc_clean/problema1/features/val.parquet",
-    PROJECT_ROOT / "data/processed/tlc_clean/problema1/features/test.parquet",
-]
-DEFAULT_RAW_INPUT = PROJECT_ROOT / "data/model_ready/dataset.parquet"
+DEFAULT_INPUT_RELATIVE = Path("data/processed/tlc_clean/datos_final.parquet")
+DEFAULT_INPUT = PROJECT_ROOT / DEFAULT_INPUT_RELATIVE
 DEFAULT_ZONE_LOOKUP = PROJECT_ROOT / "data/external/taxi_zone_lookup.csv"
 DEFAULT_REPORT_DIR = PROJECT_ROOT / "reports/funcionalidades"
 
@@ -43,43 +40,86 @@ def asignar_franja_horaria(hora: int) -> str:
     raise ValueError(f"Hora fuera de rango: {hora}")
 
 
-def cargar_datos_demanda(paths: list[Path] | None = None) -> pd.DataFrame:
-    """Carga datos agregados zona-hora o, si no existen, los agrega desde viajes."""
-    input_paths = paths or [path for path in DEFAULT_INPUTS if path.exists()]
+def columnas_parquet(path: Path) -> set[str]:
+    """Devuelve las columnas disponibles sin cargar el parquet completo."""
+    return set(pq.ParquetFile(path).schema_arrow.names)
 
-    if input_paths:
-        df = pd.concat([pd.read_parquet(path) for path in input_paths], ignore_index=True)
-    elif DEFAULT_RAW_INPUT.exists():
-        df = pd.read_parquet(DEFAULT_RAW_INPUT)
-    else:
-        rutas = ", ".join(str(path) for path in DEFAULT_INPUTS)
-        raise FileNotFoundError(
-            f"No se encontraron datos agregados ({rutas}) ni {DEFAULT_RAW_INPUT}"
-        )
 
-    if {"origen_id", "hora", "demanda"}.issubset(df.columns):
-        out = df[["origen_id", "hora", "demanda"]].copy()
-    elif {"origen_id", "timestamp_hora", "demanda"}.issubset(df.columns):
-        out = df[["origen_id", "timestamp_hora", "demanda"]].copy()
-        out["timestamp_hora"] = pd.to_datetime(out["timestamp_hora"])
-        out["hora"] = out["timestamp_hora"].dt.hour
-        out = out[["origen_id", "hora", "demanda"]]
-    elif {"origen_id", "fecha_inicio"}.issubset(df.columns):
-        df = df[["origen_id", "fecha_inicio"]].copy()
-        df["fecha_inicio"] = pd.to_datetime(df["fecha_inicio"])
-        df["timestamp_hora"] = df["fecha_inicio"].dt.floor("h")
-        out = (
-            df.groupby(["origen_id", "timestamp_hora"], observed=True)
+def cargar_parquet_columnas(path: Path, columnas: list[str]) -> pd.DataFrame:
+    """Lee solo las columnas solicitadas que existan en el parquet."""
+    disponibles = columnas_parquet(path)
+    columnas_presentes = [col for col in columnas if col in disponibles]
+    if not columnas_presentes:
+        raise ValueError(f"{path} no contiene ninguna de estas columnas: {columnas}")
+    return pd.read_parquet(path, columns=columnas_presentes)
+
+
+def agregar_viajes_por_zona_hora(path: Path) -> pd.DataFrame:
+    """Agrega viajes crudos a demanda por zona y hora real, leyendo por row groups."""
+    parquet = pq.ParquetFile(path)
+    columnas = set(parquet.schema_arrow.names)
+    if not {"origen_id", "fecha_inicio"}.issubset(columnas):
+        raise ValueError(f"{path} necesita columnas 'origen_id' y 'fecha_inicio'.")
+
+    partes = []
+    for row_group in range(parquet.metadata.num_row_groups):
+        chunk = parquet.read_row_group(
+            row_group, columns=["origen_id", "fecha_inicio"]
+        ).to_pandas()
+        chunk["fecha_inicio"] = pd.to_datetime(chunk["fecha_inicio"])
+        chunk["timestamp_hora"] = chunk["fecha_inicio"].dt.floor("h")
+        parte = (
+            chunk.groupby(["origen_id", "timestamp_hora"], observed=True)
             .size()
             .reset_index(name="demanda")
         )
-        out["hora"] = out["timestamp_hora"].dt.hour
-        out = out[["origen_id", "hora", "demanda"]]
-    else:
-        raise ValueError(
-            "El dataset necesita columnas ('origen_id', 'hora', 'demanda') "
-            "o ('origen_id', 'fecha_inicio')."
-        )
+        partes.append(parte)
+
+    if not partes:
+        return pd.DataFrame(columns=["origen_id", "hora", "demanda"])
+
+    agregado = (
+        pd.concat(partes, ignore_index=True)
+        .groupby(["origen_id", "timestamp_hora"], observed=True)["demanda"]
+        .sum()
+        .reset_index()
+    )
+    agregado["hora"] = agregado["timestamp_hora"].dt.hour
+    return agregado[["origen_id", "hora", "demanda"]]
+
+
+def cargar_datos_demanda(paths: list[Path] | None = None) -> pd.DataFrame:
+    """Carga demanda desde el dataset final o desde parquets indicados por el usuario."""
+    input_paths = paths or [DEFAULT_INPUT]
+    faltantes = [path for path in input_paths if not path.exists()]
+    if faltantes:
+        rutas = ", ".join(str(path) for path in faltantes)
+        raise FileNotFoundError(f"No se encontraron estos parquets de entrada: {rutas}")
+
+    frames = []
+    for path in input_paths:
+        columnas = columnas_parquet(path)
+        if {"origen_id", "hora", "demanda"}.issubset(columnas):
+            frames.append(
+                cargar_parquet_columnas(path, ["origen_id", "hora", "demanda"])
+            )
+        elif {"origen_id", "timestamp_hora", "demanda"}.issubset(columnas):
+            df = cargar_parquet_columnas(
+                path, ["origen_id", "timestamp_hora", "demanda"]
+            )
+            df["timestamp_hora"] = pd.to_datetime(df["timestamp_hora"])
+            df["hora"] = df["timestamp_hora"].dt.hour
+            frames.append(df[["origen_id", "hora", "demanda"]])
+        elif {"origen_id", "fecha_inicio"}.issubset(columnas):
+            frames.append(agregar_viajes_por_zona_hora(path))
+        else:
+            raise ValueError(
+                f"{path} necesita columnas ('origen_id', 'hora', 'demanda'), "
+                "('origen_id', 'timestamp_hora', 'demanda') "
+                "o ('origen_id', 'fecha_inicio')."
+            )
+
+    out = pd.concat(frames, ignore_index=True)
 
     out["origen_id"] = out["origen_id"].astype(int)
     out["hora"] = out["hora"].astype(int)
@@ -211,6 +251,22 @@ def normalizar_franja(franja: str) -> str:
     return alias.get(franja_norm, franja_norm)
 
 
+def normalizar_paths(paths: list[Path] | None = None) -> list[str]:
+    return [str(path.resolve()) for path in (paths or [DEFAULT_INPUT])]
+
+
+def resumen_existente_es_compatible(
+    out_dir: Path, inputs: list[Path] | None = None
+) -> bool:
+    metadata_path = out_dir / "demanda_zona_franja_metadata.json"
+    if not metadata_path.exists():
+        return False
+
+    with open(metadata_path, encoding="utf-8") as f:
+        metadata = json.load(f)
+    return metadata.get("input_paths") == normalizar_paths(inputs)
+
+
 def cargar_resumen_para_consulta(
     out_dir: Path = DEFAULT_REPORT_DIR,
     inputs: list[Path] | None = None,
@@ -220,9 +276,9 @@ def cargar_resumen_para_consulta(
     parquet_path = out_dir / "demanda_zona_franja.parquet"
     csv_path = out_dir / "demanda_zona_franja.csv"
 
-    if parquet_path.exists():
+    if parquet_path.exists() and resumen_existente_es_compatible(out_dir, inputs):
         return pd.read_parquet(parquet_path)
-    if csv_path.exists():
+    if csv_path.exists() and resumen_existente_es_compatible(out_dir, inputs):
         return pd.read_csv(csv_path)
 
     datos = cargar_datos_demanda(inputs)
@@ -327,7 +383,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--inputs",
         nargs="*",
         type=Path,
-        help="Parquets de entrada. Por defecto usa los features de problema1.",
+        help=f"Parquets de entrada. Por defecto usa {DEFAULT_INPUT_RELATIVE}.",
     )
     parser.add_argument(
         "--zone-lookup",
@@ -399,6 +455,7 @@ def main() -> None:
 
     datos = cargar_datos_demanda(args.inputs)
     resumen, metadata = clasificar_niveles_demanda(datos)
+    metadata["input_paths"] = normalizar_paths(args.inputs)
     resumen = enriquecer_con_zonas(resumen, args.zone_lookup)
     guardar_resultados(resumen, metadata, args.out_dir)
 
