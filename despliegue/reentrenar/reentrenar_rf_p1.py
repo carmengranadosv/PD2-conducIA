@@ -1,8 +1,6 @@
 import pandas as pd
-import numpy as np
 import joblib
 import json
-import os
 from pathlib import Path
 from sklearn.ensemble import RandomForestRegressor
 
@@ -46,7 +44,11 @@ def reentrenar_p1_completo():
     FEATURE_COLS = meta['feature_cols']
     TARGET = meta['target']
 
-    X = df_full[FEATURE_COLS].fillna(0)
+    missing_cols = [col for col in FEATURE_COLS + [TARGET] if col not in df_full.columns]
+    if missing_cols:
+        raise ValueError(f"Faltan columnas esperadas en los datos de P1: {missing_cols}")
+
+    X = df_full[FEATURE_COLS]
     y = df_full[TARGET]
 
     # ============================================================
@@ -60,7 +62,6 @@ def reentrenar_p1_completo():
         max_features='sqrt',
         random_state=42,
         n_jobs=-1,
-        verbose=1
     )
 
     # ============================================================

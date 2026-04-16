@@ -1,0 +1,71 @@
+{
+  "modelo": "MLP_P2",
+  "features": [
+    "hora",
+    "dia_semana",
+    "es_finde",
+    "hora_sen",
+    "hora_cos",
+    "mes_num",
+    "temp_c",
+    "precipitation",
+    "viento_kmh",
+    "lluvia",
+    "nieve",
+    "es_festivo",
+    "num_eventos",
+    "oferta_inferida",
+    "tasa_historica",
+    "demanda_p1",
+    "n_viajes",
+    "espera_media",
+    "zona_enc"
+  ],
+  "target": "target",
+  "config": {
+    "hidden_layers": [
+      256,
+      128,
+      64
+    ],
+    "dropout": 0.2,
+    "epochs": 10,
+    "batch_size": 1024,
+    "learning_rate": 0.001,
+    "pos_weight": 0.5
+  },
+  "train_samples": 11008389,
+  "input_dim": 19,
+  "cascading_input": {
+    "feature": "demanda_p1",
+    "rf_p1_path": "/home/marcospoza/PD2/PD2-conducIA/despliegue/modelos_finales/modelo_p1_rf.joblib",
+    "rf_p1_features": [
+      "origen_id",
+      "hora",
+      "dia_semana",
+      "dia_mes",
+      "mes_num",
+      "es_finde",
+      "demanda",
+      "lag_1h",
+      "lag_2h",
+      "lag_3h",
+      "lag_6h",
+      "lag_12h",
+      "lag_24h",
+      "roll_mean_3h",
+      "roll_std_3h",
+      "roll_mean_24h",
+      "roll_std_24h",
+      "media_hist",
+      "temp_c",
+      "precipitation",
+      "viento_kmh",
+      "velocidad_mph",
+      "lluvia",
+      "nieve",
+      "es_festivo",
+      "num_eventos"
+    ]
+  }
+}
