@@ -1,0 +1,35 @@
+{
+  "modelo": "NN_With_Embeddings_P4",
+  "target": "velocidad_mph",
+  "zona_col": "origen_id",
+  "numeric_features": [
+    "temp_c",
+    "precipitation",
+    "viento_kmh",
+    "lluvia",
+    "nieve",
+    "hay_lluvia",
+    "hay_nieve",
+    "es_festivo",
+    "num_eventos",
+    "dia_semana",
+    "es_fin_semana",
+    "hora_sen",
+    "hora_cos"
+  ],
+  "config": {
+    "embedding_dim": 10,
+    "dense_layers": [
+      128,
+      64,
+      32
+    ],
+    "dropout": 0.2,
+    "epochs": 15,
+    "batch_size": 4096,
+    "optimizer": "adam",
+    "loss": "mae"
+  },
+  "train_samples": 80441301,
+  "num_unique_zones": 261
+}
