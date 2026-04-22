@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ConducIA - Inicio</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
     <style>
         .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
         .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
@@ -25,10 +25,10 @@
 <body>
     <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
     <nav class="main-nav">
-        <a href="index.html" class="active">Inicio</a>
-        <a href="taxi.html">Panel Taxi</a>
-        <a href="vtc.html">Panel VTC</a>
-        <a href="documentacion.html">Documentación</a>
+        <a href="/" class="active">Inicio</a>
+        <a href="/taxi">Panel Taxi</a>
+        <a href="/vtc">Panel VTC</a>
+        <a href="/documentacion">Documentación</a>
     </nav>
     <div class="main-wrapper">
         <section class="hero-section">
@@ -42,12 +42,12 @@
                 <div class="profile-card">
                     <h3>Soy Taxista</h3>
                     <p>Predicción de demanda y análisis de tráfico para optimizar tu posicionamiento estratégico.</p>
-                    <a href="taxi.html" class="btn-main">Entrar Panel Taxi</a>
+                    <a href="/taxi" class="btn-main">Entrar Panel Taxi</a>
                 </div>
                 <div class="profile-card">
                     <h3>Soy VTC</h3>
                     <p>Evaluación de trayectos, estimación de propinas y auditoría de navegación eficiente.</p>
-                    <a href="vtc.html" class="btn-main">Entrar Panel VTC</a>
+                    <a href="/vtc" class="btn-main">Entrar Panel VTC</a>
                 </div>
             </div>
         </section>
