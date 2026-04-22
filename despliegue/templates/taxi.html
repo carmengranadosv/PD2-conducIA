@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>ConducIA - Panel Taxi</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
     <style>
         .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
         .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
@@ -18,32 +18,55 @@
 <body>
     <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
     <nav class="main-nav">
-        <a href="index.html">Inicio</a>
-        <a href="taxi.html" class="active">Panel Taxi</a>
-        <a href="vtc.html">Panel VTC</a>
-        <a href="documentacion.html">Documentación</a>
+        <a href="/">Inicio</a>
+        <a href="/taxi" class="active">Panel Taxi</a>
+        <a href="/vtc">Panel VTC</a>
+        <a href="/documentacion">Documentación</a>
     </nav>
     <div class="main-wrapper">
         <div class="panel-box">
             <h2>Panel Inteligente de Posicionamiento</h2>
             <p style="color: #666; margin-bottom: 30px;">Análisis de demanda (RF), éxito de zona (MLP) y eficiencia de tráfico según el clima actual.</p>
-            <div style="margin-bottom:25px;">
-                <label style="display:block; font-weight:bold; margin-bottom:10px;">Zona Actual</label>
-                <select id="zonaTaxi" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
-                    <option>JFK Airport</option>
-                    <option>Lower Manhattan</option>
-                    <option>Upper East Side</option>
-                </select>
+            
+    <form action="/taxi" method="post">
+        <div style="margin-bottom:25px;">
+            <label style="display:block; font-weight:bold; margin-bottom:10px;">Zona Actual</label>
+            <select name="zona_id" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
+                <option value="1">Newark Airport (EWR)</option>
+                <option value="132">JFK Airport (Jamaica)</option>
+                <option value="138">LaGuardia Airport (LGA)</option>
+                <option value="161">Midtown Center</option>
+                <option value="230">Times Sq / Theatre District</option>
+                <option value="237">Upper East Side South</option>
+                <option value="79">East Village</option>
+                <option value="249">West Village</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom:25px;">
+            <label style="display:block; font-weight:bold; margin-bottom:10px;">Modo de Análisis</label>
+            <select name="planificacion_hora" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
+                <option value="actual">Tiempo Real (Ahora)</option>
+                <option value="8">Mañana (08:00 AM)</option>
+                <option value="18">Tarde (18:00 PM)</option>
+                <option value="22">Noche (22:00 PM)</option>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn-analizar">Analizar con modelos de ConducIA</button>
+    </form>
+            {% if mostrar_res %}
+            <div id="resTaxi" style="margin-top:30px; padding:25px; background:#fdfdfd; border-radius:10px; border: 1px solid #eee; text-align: center;">
+                <p><strong>Demanda Estimada (RF):</strong> {{ resultado.demanda_estimada }} viajes/h</p>
+                <p><strong>Probabilidad de Éxito (MLP):</strong> {{ resultado.exito_prob }}%</p>
+                
+                <div class="decision-highlight">
+                    RECOMENDACIÓN: {{ resultado.recomendacion }}
+                </div>
             </div>
-            <button class="btn-analizar" onclick="analizarTaxi()">Analizar con modelos de ConducIA</button>
-            <div id="resTaxi" style="display:none; margin-top:30px; padding:25px; background:#fdfdfd; border-radius:10px; border: 1px solid #eee; text-align: center;">
-                <p><strong>Demanda Estimada (RF):</strong> 215.4 viajes/hora</p>
-                <p><strong>Estado del Tráfico:</strong> Poco atasco (Velocidad media alta)</p>
-                <p><strong>Propina Media en Zona:</strong> $4.80</p>
-                <div class="decision-highlight">RECOMENDACIÓN: Permanece en la zona actual.</div>
-            </div>
+            {% endif %}
+
         </div>
     </div>
-    <script>function analizarTaxi(){document.getElementById('resTaxi').style.display='block';}</script>
 </body>
 </html>
