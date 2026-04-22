@@ -46,12 +46,18 @@ if (BASE_DIR / "static").exists():
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# 2. Carga de Datos complementarios 
-# Necesitamos los lags y medias históricas para que los modelos de los problemas 1 y 2 funcionen
+# 2. Carga de Datos complementarios (MUESTREO ALEATORIO PARA VARIEDAD)
 try:
-    df_historico = pd.read_parquet(DATA_PATH)
+    # Cargamos el dataset y tomamos una muestra aleatoria de 200,000 filas
+    # random_state=42 sirve para que la "aleatoriedad" sea siempre la misma y no cambie cada vez que reinicies
+    df_historico = pd.read_parquet(DATA_PATH).sample(n=200000, random_state=42)
+    
+    print(f"✅ ÉXITO: Dataset cargado con 200.000 filas aleatorias.")
+    print(f"📊 Columnas listas: {list(df_historico.columns)}")
+
 except Exception as e:
-    print(f"Advertencia: No se pudo cargar el dataset histórico en {DATA_PATH}: {e}")
+    print(f"⚠️ ADVERTENCIA: Fallo al cargar datos en {DATA_PATH}. Usando DF vacío.")
+    print(f"Detalle: {e}")
     df_historico = pd.DataFrame()
 
 
