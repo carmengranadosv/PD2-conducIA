@@ -15,9 +15,10 @@ from typing import Annotated
 import uvicorn
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from pathlib import Path
 
 # Ruta base
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "modelos_finales"
 DATA_PATH = BASE_DIR.parent / "data/processed/tlc_clean/datos_final.parquet"
 
@@ -199,13 +200,33 @@ async def predict_vtc(
     
     propina_estimada = app.modelo_p5.predict(entrada_p5)[0]
 
-    # 4. Predicción de Viaje encadenado
+
+    # 4. Predicción de Viaje encadenado (Lógica en Cascada)
     # IMPORTANTE: Evaluamos la zona de DESTINO para ver si habrá trabajo allí
+    # Primero: Ejecutamos el Modelo 1 para predecir la demanda en el DESTINO
+    entrada_p1_destino = pd.DataFrame([{
+        "origen_id": destino_id, # Evaluamos la zona donde dejarás al pasajero
+        "hora_sen": tiempo["hora_sen"],
+        "hora_cos": tiempo["hora_cos"],
+        "es_fin_semana": tiempo["es_fin_semana"],
+        "dia_semana": tiempo["dia_semana"],
+        "temp_c": 15.0, # O usar info_clima si tenéis la función de API
+        "precipitation": 0.0,
+        "oferta_inferida": 1.0, 
+        "tasa_historica": 0.5
+    }])
+    
+    # Predecimos demanda real en destino con Modelo 1
+    demanda_pred_destino = app.modelo_p1.predict(entrada_p1_destino)[0]
+
+    # Segundo: Usamos esa demanda predicha para alimentar el Modelo 2 (MLP)
     dest_enc = app.encoder_p2.transform([destino_id])[0]
-    # Usamos una demanda estimada media para esa zona de destino
-    input_p2_dest = np.array([[20.0, 15.0, dest_enc]]) # demanda_p1, temp, zona
+    input_p2_dest = np.array([[demanda_pred_destino, 15.0, dest_enc]]) # demanda_p1, temp, zona
     input_p2_scaled = app.scaler_p2.transform(input_p2_dest)
+    
+    # Probabilidad final de éxito en la zona de destino
     prob_exito_destino = app.modelo_p2.predict(input_p2_scaled)[0][0]
+    
 
     # 5. Lógica de la decisión final
     es_rentable = True
