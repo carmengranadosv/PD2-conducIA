@@ -4,46 +4,92 @@
     <meta charset="UTF-8">
     <title>ConducIA - Panel VTC</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
     <style>
         .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
         .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
         .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
         .main-nav a.active { background: #e63946; color: white; }
         .panel-box { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); max-width: 700px; margin: 40px auto; }
-        .btn-analizar { background: #222; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; }
-        .decision-vtc { font-size: 1.5rem; font-weight: 700; color: #2b9348; margin-top: 20px; text-transform: uppercase; border: 2px solid #2b9348; padding: 15px; display: inline-block; width: 100%; box-sizing: border-box; }
+        .btn-analizar { background: #222; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; transition: 0.3s; }
+        .btn-analizar:hover { background: #e63946; }
+        .decision-vtc { font-size: 1.5rem; font-weight: 700; margin-top: 20px; text-transform: uppercase; border: 2px solid; padding: 15px; display: inline-block; width: 100%; box-sizing: border-box; }
+        .input-field { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-top: 5px; font-family: 'Montserrat', sans-serif; box-sizing: border-box; }
+        label { display: block; font-weight: bold; margin-top: 15px; }
     </style>
 </head>
 <body>
     <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
     <nav class="main-nav">
-        <a href="index.html">Inicio</a>
-        <a href="taxi.html">Panel Taxi</a>
-        <a href="vtc.html" class="active">Panel VTC</a>
-        <a href="documentacion.html">Documentación</a>
+        <a href="/">Inicio</a>
+        <a href="/taxi">Panel Taxi</a>
+        <a href="/vtc" class="active">Panel VTC</a>
+        <a href="/documentacion">Documentación</a>
     </nav>
     <div class="main-wrapper">
         <div class="panel-box">
             <h2>Auditoría de Trayecto VTC</h2>
-            <p style="color: #666; margin-bottom: 30px;">Predicción de propina (XGBoost) y análisis de eficiencia de navegación basado en clima y tráfico.</p>
-            <div style="margin-bottom:25px;">
-                <label style="display:block; font-weight:bold; margin-bottom:10px;">Destino del Viaje</label>
-                <select style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
-                    <option>LaGuardia Airport</option>
-                    <option>Brooklyn Heights</option>
-                    <option>Times Square</option>
+            <p style="color: #666; margin-bottom: 30px;">Predicción de propina y análisis de eficiencia de navegación basado en clima y tráfico.</p>
+            <form action="/vtc" method="post">
+                <div style="display: flex; gap: 15px;">
+                    <div style="flex: 1;">
+                        <label>Origen (ID)</label>
+                        <select name="origen_id" class="input-field">
+                            <option value="161">Midtown Manhattan (161)</option>
+                            <option value="132">JFK Airport (132)</option>
+                            <option value="138">LaGuardia Airport (138)</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label>Destino (ID)</label>
+                        <select name="destino_id" class="input-field">
+                            <option value="138">LaGuardia Airport (138)</option>
+                            <option value="231">Brooklyn Heights (231)</option>
+                            <option value="170">Murray Hill (170)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 15px;">
+                    <div style="flex: 1;">
+                        <label>Precio Base ($)</label>
+                        <input type="number" step="0.01" name="precio_base" class="input-field" required placeholder="Ej: 25.50">
+                    </div>
+                    <div style="flex: 1;">
+                        <label>Plataforma</label>
+                        <select name="tipo_vehiculo" class="input-field">
+                            <option value="1">Yellow Taxi</option>
+                            <option value="2">VTC (Uber/Lyft)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label>Hora de Salida</label>
+                <select name="planificacion_hora" class="input-field">
+                    <option value="actual">Ahora (Tiempo Real)</option>
+                    {% for h in range(24) %}
+                    <option value="{{ h }}">{{ h }}:00</option>
+                    {% endfor %}
                 </select>
+
+                <div style="margin-top: 30px;">
+                    <button type="submit" class="btn-analizar">Analizar con modelos de ConducIA</button>
+                </div>
+            </form>
+
+            {% if resultado %}
+            <div id="resVTC" style="margin-top:30px; padding:25px; background:#fdfdfd; border-radius:10px; border: 1px solid #eee; text-align: center;">
+                <p><strong>Propina Estimada (P5):</strong> ${{ resultado.propina }}</p>
+                <p><strong>Velocidad Predicha (P4):</strong> {{ resultado.velocidad }} mph</p>
+                <p><strong>Retorno/Encadenado:</strong> {{ resultado.encadenado }}</p>
+                <p style="color: #666; font-size: 0.85rem; margin-top: 10px;">{{ resultado.detalles }}</p>
+                
+                <div class="decision-vtc {% if resultado.decision == 'ACEPTAR' %}decision-aceptar{% else %}decision-rechazar{% endif %}">
+                    DECISIÓN: {{ resultado.decision }}
+                </div>
             </div>
-            <button class="btn-analizar" onclick="analizarVTC()">Analizar con modelos de ConducIA</button>
-            <div id="resVTC" style="display:none; margin-top:30px; padding:25px; background:#fdfdfd; border-radius:10px; border: 1px solid #eee; text-align: center;">
-                <p><strong>Propina Estimada (XGBoost):</strong> +$5.12</p>
-                <p><strong>Navegación (Apartado 4):</strong> Tráfico Medio (Velocidad estable)</p>
-                <p><strong>Probabilidad Rentabilidad:</strong> 92% (Éxito detectado)</p>
-                <div class="decision-vtc">DECISIÓN: Aceptar viaje.</div>
-            </div>
+            {% endif %}
         </div>
     </div>
-    <script>function analizarVTC(){document.getElementById('resVTC').style.display='block';}</script>
 </body>
 </html>
