@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <title>ConducIA - Quiénes Somos</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
     <style>
         .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
         .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
         .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
+        .main-nav a:hover { color: #e63946; background: rgba(230, 57, 70, 0.05); }
         .main-nav a.active { background: #e63946; color: white; }
         .doc-wrapper { max-width: 900px; margin: 40px auto; background: white; padding: 60px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.05); }
         .linea-roja { width: 60px; height: 4px; background: #e63946; margin: 20px 0; }
@@ -16,17 +16,18 @@
         h2 { font-size: 1.8rem; margin-top: 40px; color: #222; }
         p { line-height: 1.8; color: #444; font-size: 1.1rem; }
         .caja-mision { border-left: 5px solid #e63946; background: #fdf2f3; padding: 30px; margin: 30px 0; border-radius: 0 10px 10px 0; font-style: italic; }
-        .badge { background: #e63946; color: white; padding: 5px 12px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; }
     </style>
 </head>
 <body>
     <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
     <nav class="main-nav">
-        <a href="index.html">Inicio</a>
-        <a href="taxi.html">Panel Taxi</a>
-        <a href="vtc.html">Panel VTC</a>
-        <a href="documentacion.html" class="active">Documentación</a>
+        <a href="/">Inicio</a>
+        <a href="/taxi">Panel Taxi</a>
+        <a href="/vtc">Panel VTC</a>
+        <a href="/documentacion" 
+        class="active">Documentación</a>
     </nav>
+    
     <div class="doc-wrapper">
         <p style="text-transform: uppercase; color: #999; letter-spacing: 2px;">Sobre nosotros</p>
         <h1>ConducIA</h1>
@@ -46,25 +47,23 @@
         <h2>Nuestra Inteligencia</h2>
         <p>Hemos desarrollado un motor predictivo basado en cuatro pilares definitivos:</p>
         <ul>
-            <li><strong>Anticipación Inteligente:</strong> Un modelo <strong>Random Forest</strong> que predice dónde se concentrará la demanda. [cite: 174]</li>
-            <li><strong>Filtro de Éxito:</strong> Una <strong>Red Neuronal MLP</strong> que identifica únicamente las zonas con mayor potencial de facturación. [cite: 251]</li>
-            <li><strong>Auditoría de Navegación:</strong> Un sistema de análisis de tráfico y clima que evalúa la eficiencia de las rutas en tiempo real. [cite: 298]</li>
-            <li><strong>Auditoría de Rentabilidad:</strong> Un algoritmo <strong>XGBoost</strong> especializado en predecir la cuantía de la propina y la eficiencia vial. [cite: 369]</li>
+            <li><strong>Anticipación Inteligente:</strong> Un modelo <strong>Random Forest</strong> que predice dónde se concentrará la demanda.</li>
+            <li><strong>Filtro de Éxito:</strong> Una <strong>Red Neuronal MLP</strong> que identifica únicamente las zonas con mayor potencial de facturación.</li>
+            <li><strong>Auditoría de Navegación:</strong> Un modelo de <strong>Redes Neuronales con Embeddings</strong> para el análisis de tráfico y clima que evalúa la eficiencia de las rutas en tiempo real.</li>
+            <li><strong>Auditoría de Rentabilidad:</strong> Un algoritmo <strong>XGBoost</strong> especializado en predecir la cuantía de la propina y la eficiencia vial.</li>
         </ul>
 
-    </div>
+        <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
+            <p style="margin-bottom: 15px;">El código completo y el control de versiones del proyecto están disponibles en nuestro repositorio:</p>
+            
+            <a href="https://github.com/carmengranadosv/PD2-conducIA" target="_blank" style="background: #24292e; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-flex; align-items: center; gap: 10px;">
+                <svg height="20" width="20" viewBox="0 0 16 16" fill="white">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                </svg>
+                Acceder al Repositorio en GitHub
+            </a>
+        </div>
 
-    <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
-        <p style="margin-bottom: 15px;">El código completo y el control de versiones del proyecto están disponibles en nuestro repositorio:</p>
-        
-        <a href="https://github.com/carmengranadosv/PD2-conducIA" target="_blank" style="background: #24292e; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-flex; align-items: center; gap: 10px;">
-            <svg height="20" width="20" viewBox="0 0 16 16" fill="white">
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-            </svg>
-            Acceder al Repositorio en GitHub
-        </a>
-
-        
         <footer style="margin-top: 60px; padding-top: 30px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 0.9rem;">
             Desarrollado por: Lucía G. · Nayara G. · Mª Carmen G. · Carla L. · Marcos P.<br>
             <strong>Grado en Ingeniería de Datos e IA - Universidad Complutense de Madrid</strong>
