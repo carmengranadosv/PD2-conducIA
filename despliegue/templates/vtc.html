@@ -12,7 +12,12 @@
         .panel-box { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); max-width: 700px; margin: 40px auto; }
         .btn-analizar { background: #222; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; transition: 0.3s; }
         .btn-analizar:hover { background: #e63946; }
+        
+        /* Estilos para la decisión */
         .decision-vtc { font-size: 1.5rem; font-weight: 700; margin-top: 20px; text-transform: uppercase; border: 2px solid; padding: 15px; display: inline-block; width: 100%; box-sizing: border-box; }
+        .decision-aceptar { border-color: #2a9d8f; color: #2a9d8f; background: rgba(42, 157, 143, 0.05); }
+        .decision-rechazar { border-color: #e63946; color: #e63946; background: rgba(230, 57, 70, 0.05); }
+
         .input-field { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-top: 5px; font-family: 'Montserrat', sans-serif; box-sizing: border-box; }
         label { display: block; font-weight: bold; margin-top: 15px; }
     </style>
@@ -29,32 +34,35 @@
         <div class="panel-box">
             <h2>Auditoría de Trayecto VTC</h2>
             <p style="color: #666; margin-bottom: 30px;">Predicción de propina y análisis de eficiencia de navegación basado en clima y tráfico.</p>
+            
             <form action="/vtc" method="post">
                 <div style="display: flex; gap: 15px;">
                     <div style="flex: 1;">
                         <label>Origen (ID)</label>
                         <select name="origen_id" class="input-field">
-                            <option value="1">Newark Airport (EWR)</option>
-                            <option value="132">JFK Airport (Jamaica)</option>
-                            <option value="138">LaGuardia Airport (LGA)</option>
-                            <option value="161">Midtown Center</option>
-                            <option value="230">Times Sq / Theatre District</option>
-                            <option value="237">Upper East Side South</option>
-                            <option value="79">East Village</option>
-                            <option value="249">West Village</option>
+                            {% set o_id = seleccion.origen|default(0)|int %}
+                            <option value="1" {{ 'selected' if o_id == 1 }}>Newark Airport (EWR)</option>
+                            <option value="132" {{ 'selected' if o_id == 132 }}>JFK Airport (Jamaica)</option>
+                            <option value="138" {{ 'selected' if o_id == 138 }}>LaGuardia Airport (LGA)</option>
+                            <option value="161" {{ 'selected' if o_id == 161 }}>Midtown Center</option>
+                            <option value="230" {{ 'selected' if o_id == 230 }}>Times Sq / Theatre District</option>
+                            <option value="237" {{ 'selected' if o_id == 237 }}>Upper East Side South</option>
+                            <option value="79" {{ 'selected' if o_id == 79 }}>East Village</option>
+                            <option value="249" {{ 'selected' if o_id == 249 }}>West Village</option>
                         </select>
                     </div>
                     <div style="flex: 1;">
                         <label>Destino (ID)</label>
                         <select name="destino_id" class="input-field">
-                            <option value="1">Newark Airport (EWR)</option>
-                            <option value="132">JFK Airport (Jamaica)</option>
-                            <option value="138">LaGuardia Airport (LGA)</option>
-                            <option value="161">Midtown Center</option>
-                            <option value="230">Times Sq / Theatre District</option>
-                            <option value="237">Upper East Side South</option>
-                            <option value="79">East Village</option>
-                            <option value="249">West Village</option>
+                            {% set d_id = seleccion.destino|default(0)|int %}
+                            <option value="1" {{ 'selected' if d_id == 1 }}>Newark Airport (EWR)</option>
+                            <option value="132" {{ 'selected' if d_id == 132 }}>JFK Airport (Jamaica)</option>
+                            <option value="138" {{ 'selected' if d_id == 138 }}>LaGuardia Airport (LGA)</option>
+                            <option value="161" {{ 'selected' if d_id == 161 }}>Midtown Center</option>
+                            <option value="230" {{ 'selected' if d_id == 230 }}>Times Sq / Theatre District</option>
+                            <option value="237" {{ 'selected' if d_id == 237 }}>Upper East Side South</option>
+                            <option value="79" {{ 'selected' if d_id == 79 }}>East Village</option>
+                            <option value="249" {{ 'selected' if d_id == 249 }}>West Village</option>
                         </select>
                     </div>
                 </div>
@@ -62,22 +70,25 @@
                 <div style="display: flex; gap: 15px;">
                     <div style="flex: 1;">
                         <label>Precio Base ($)</label>
-                        <input type="number" step="0.01" name="precio_base" class="input-field" required placeholder="Ej: 25.50">
+                        <input type="number" step="0.01" name="precio_base" class="input-field" required 
+                               value="{{ seleccion.precio if seleccion else '' }}" placeholder="Ej: 25.50">
                     </div>
                     <div style="flex: 1;">
                         <label>Plataforma</label>
                         <select name="tipo_vehiculo" class="input-field">
-                            <option value="1">Yellow Taxi</option>
-                            <option value="2">VTC (Uber/Lyft)</option>
+                            {% set v_type = seleccion.vehiculo|default(0)|int %}
+                            <option value="1" {{ 'selected' if v_type == 1 }}>Yellow Taxi</option>
+                            <option value="2" {{ 'selected' if v_type == 2 }}>VTC (Uber/Lyft)</option>
                         </select>
                     </div>
                 </div>
 
                 <label style="display:block; font-weight:bold; margin-bottom:10px;">Hora de Salida</label>
                 <select name="planificacion_hora" class="input-field">
-                    <option value="actual">Ahora (Tiempo Real)</option>
+                    {% set h_sel = seleccion.hora|default('actual') %}
+                    <option value="actual" {{ 'selected' if h_sel == 'actual' }}>Ahora (Tiempo Real)</option>
                     {% for h in range(24) %}
-                    <option value="{{ h }}">{{ h }}:00</option>
+                    <option value="{{ h }}" {{ 'selected' if h_sel == h|string }}>{{ h }}:00</option>
                     {% endfor %}
                 </select>
 
@@ -93,7 +104,7 @@
                 <p><strong>Retorno/Encadenado:</strong> {{ resultado.encadenado }}</p>
                 <p style="color: #666; font-size: 0.85rem; margin-top: 10px;">{{ resultado.detalles }}</p>
                 
-                <div class="decision-vtc {% if resultado.decision == 'ACEPTAR' %}decision-aceptar{% else %}decision-rechazar{% endif %}">
+                <div class="decision-vtc {{ 'decision-aceptar' if resultado.decision == 'ACEPTAR' else 'decision-rechazar' }}">
                     DECISIÓN: {{ resultado.decision }}
                 </div>
             </div>
