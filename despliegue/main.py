@@ -20,9 +20,16 @@ from starlette.middleware.sessions import SessionMiddleware
 # --- 2. DEFINICIÓN DE RUTAS Y DIRECTORIOS ---
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "modelos_finales"
-DATA_FULL_PATH = Path("/app/data/processed/tlc_clean/datos_final.parquet")
-P5_DATA_PATH = Path("/app/data/processed/tlc_clean/problema5/train.parquet")
-P2_DATA_PATH = Path("/app/data/processed/tlc_clean/problema2/features/train.parquet")
+DATA_ROOT = Path(os.getenv("CONDUCIA_DATA_DIR", "/app/data"))
+if not DATA_ROOT.exists() and (BASE_DIR.parent / "data").exists():
+    DATA_ROOT = BASE_DIR.parent / "data"
+
+DATA_FULL_PATH = DATA_ROOT / "processed/tlc_clean/datos_final.parquet"
+CONTEXT_DIR = DATA_ROOT / "processed/tlc_clean/contexto_web"
+P2_CONTEXT_PATH = CONTEXT_DIR / "contexto_p2.parquet"
+P5_CONTEXT_PATH = CONTEXT_DIR / "contexto_p5.parquet"
+P2_FALLBACK_PATH = DATA_ROOT / "processed/tlc_clean/problema2/features/train.parquet"
+P5_FALLBACK_PATH = DATA_ROOT / "processed/tlc_clean/problema5/train.parquet"
 
 # --- 3. CARGA DE MODELOS (LIFESPAN) ---
 @asynccontextmanager
@@ -57,30 +64,31 @@ else:
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # --- 5. CARGA DE DATOS OPTIMIZADA ---
-try:
-    import pyarrow.parquet as pq
+def cargar_contexto(path: Path, fallback_path: Path, nombre: str) -> pd.DataFrame:
+    try:
+        if path.exists():
+            df = pd.read_parquet(path)
+            print(f"✅ Contexto {nombre} cargado: {len(df):,} filas.")
+            return df
 
-    # Dataset general
-    dataset_general = pq.ParquetFile(DATA_FULL_PATH)
-    df_historico = next(dataset_general.iter_batches(batch_size=100000)).to_pandas()
+        import pyarrow.parquet as pq
 
-    # Dataset P2: contexto para taxi
-    dataset_p2 = pq.ParquetFile(P2_DATA_PATH)
-    df_p2_contexto = next(dataset_p2.iter_batches(batch_size=100000)).to_pandas()
+        dataset = pq.ParquetFile(fallback_path)
+        df = next(dataset.iter_batches(batch_size=100000)).to_pandas()
+        print(
+            f"⚠️ No existe {path}. "
+            f"Usando primer batch de {fallback_path.name} para {nombre}."
+        )
+        return df
 
-    # Dataset P5: contexto para VTC / propinas
-    dataset_p5 = pq.ParquetFile(P5_DATA_PATH)
-    df_p5_contexto = next(dataset_p5.iter_batches(batch_size=100000)).to_pandas()
+    except Exception as e:
+        print(f"⚠️ Error cargando contexto {nombre}: {e}")
+        return pd.DataFrame()
 
-    print("✅ Dataset general cargado correctamente.")
-    print("✅ Dataset P2 cargado correctamente.")
-    print("✅ Dataset P5 cargado correctamente.")
 
-except Exception as e:
-    print(f"⚠️ Error cargando datasets: {e}")
-    df_historico = pd.DataFrame()
-    df_p2_contexto = pd.DataFrame()
-    df_p5_contexto = pd.DataFrame()
+df_historico = pd.DataFrame()
+df_p2_contexto = cargar_contexto(P2_CONTEXT_PATH, P2_FALLBACK_PATH, "P2")
+df_p5_contexto = cargar_contexto(P5_CONTEXT_PATH, P5_FALLBACK_PATH, "P5")
 
 # --- 6. FUNCIONES DE APOYO ---
 def procesar_tiempo_despliegue(hora_usuario: str = "actual"):
@@ -109,69 +117,87 @@ def procesar_tiempo_despliegue(hora_usuario: str = "actual"):
         "hora_sen": hora_sen,
         "hora_cos": hora_cos,
         "dia_semana": dia_semana,
+        "dia_mes": ahora.day,
+        "mes_num": ahora.month,
         "es_fin_semana": es_fin_semana,
         "es_finde": es_fin_semana,
     }
 
-def obtener_contexto_zona(zona_id, h_int):
-    """Busca en el dataset de contexto (P2) la información relevante para la zona y hora dada."""
+def resumir_contexto(filtrado: pd.DataFrame):
+    """Resume varias filas historicas en una sola fila compatible con valor_contexto."""
+    if filtrado.empty:
+        return None
+
+    if len(filtrado) == 1:
+        return filtrado.iloc[0]
+
+    resumen = {}
+    for col in filtrado.columns:
+        serie = filtrado[col].dropna()
+        if serie.empty:
+            resumen[col] = np.nan
+        elif pd.api.types.is_numeric_dtype(serie):
+            resumen[col] = serie.mean()
+        else:
+            resumen[col] = serie.mode().iloc[0]
+
+    return pd.Series(resumen)
+
+def buscar_contexto_historico(df: pd.DataFrame, zona_id, h_int, mes_num, dia_semana):
+    """Busca contexto historico comparable, de mas especifico a mas general."""
     try:
-        if df_p2_contexto.empty:
+        if df.empty:
             return None
 
         zona_id = int(zona_id)
         h_int = int(h_int)
+        mes_num = int(mes_num)
+        dia_semana = int(dia_semana)
 
-        mask = (
-            (df_p2_contexto["origen_id"].astype(int) == zona_id) &
-            (df_p2_contexto["hora"].astype(int) == h_int)
-        )
-        filtrado = df_p2_contexto.loc[mask]
-
-        if not filtrado.empty:
-            return filtrado.iloc[0]
-
-        filtrado_z = df_p2_contexto.loc[
-            df_p2_contexto["origen_id"].astype(int) == zona_id
+        filtros = [
+            {"origen_id": zona_id, "mes_num": mes_num, "dia_semana": dia_semana, "hora": h_int},
+            {"origen_id": zona_id, "mes_num": mes_num, "hora": h_int},
+            {"origen_id": zona_id, "dia_semana": dia_semana, "hora": h_int},
+            {"origen_id": zona_id, "hora": h_int},
+            {"origen_id": zona_id},
         ]
 
-        if not filtrado_z.empty:
-            return filtrado_z.iloc[0]
+        for filtro in filtros:
+            mask = pd.Series(True, index=df.index)
+            for col, valor in filtro.items():
+                if col not in df.columns:
+                    mask = pd.Series(False, index=df.index)
+                    break
+                mask &= df[col].astype(int) == int(valor)
+
+            filtrado = df.loc[mask]
+            if not filtrado.empty:
+                return resumir_contexto(filtrado)
 
     except Exception as e:
-        print("Error buscando contexto zona:", e)
+        print("Error buscando contexto historico:", e)
 
     return None
 
-def obtener_contexto_p5(origen_id, h_int):
-    """Busca en el dataset de contexto (P5) la información relevante para el origen y hora dada."""
-    try:
-        if df_p5_contexto.empty:
-            return None
+def obtener_contexto_zona(zona_id, t):
+    """Busca contexto historico P2 para taxi."""
+    return buscar_contexto_historico(
+        df_p2_contexto,
+        zona_id,
+        t["hora_int"],
+        t["mes_num"],
+        t["dia_semana"],
+    )
 
-        origen_id = int(origen_id)
-        h_int = int(h_int)
-
-        mask = (
-            (df_p5_contexto["origen_id"].astype(int) == origen_id) &
-            (df_p5_contexto["hora"].astype(int) == h_int)
-        )
-        filtrado = df_p5_contexto.loc[mask]
-
-        if not filtrado.empty:
-            return filtrado.iloc[0]
-
-        filtrado_z = df_p5_contexto.loc[
-            df_p5_contexto["origen_id"].astype(int) == origen_id
-        ]
-
-        if not filtrado_z.empty:
-            return filtrado_z.iloc[0]
-
-    except Exception as e:
-        print("Error buscando contexto P5:", e)
-
-    return None
+def obtener_contexto_p5(origen_id, t):
+    """Busca contexto historico P5 para VTC."""
+    return buscar_contexto_historico(
+        df_p5_contexto,
+        origen_id,
+        t["hora_int"],
+        t["mes_num"],
+        t["dia_semana"],
+    )
 
 def valor_contexto(info, columna, defecto=0.0, tipo=float):
     """
@@ -211,6 +237,17 @@ def transformar_label_encoder_seguro(encoder, valor):
     except Exception as e:
         print("Error en LabelEncoder:", e)
         return 0
+
+def normalizar_tipo_vehiculo(valor):
+    """Convierte los valores del formulario a las categorias vistas por P5."""
+    mapa = {
+        "1": "Yellow Taxi",
+        "2": "VTC",
+        "yellow": "Yellow Taxi",
+        "taxi": "Yellow Taxi",
+        "vtc": "VTC",
+    }
+    return mapa.get(str(valor).strip().lower(), str(valor))
 
 # --- 7. RUTAS GET (NAVEGACIÓN) ---
 @app.get("/", response_class=HTMLResponse)
@@ -255,7 +292,7 @@ async def predict_taxi(
     planificacion_hora: str = Form("actual")
 ):
     t = procesar_tiempo_despliegue(planificacion_hora)
-    info = obtener_contexto_zona(zona_id, t["hora_int"])
+    info = obtener_contexto_zona(zona_id, t)
 
     # Valores de contexto P2
     oferta = valor_contexto(info, "oferta_inferida", 1.0, float)
@@ -269,7 +306,7 @@ async def predict_taxi(
     nieve = valor_contexto(info, "nieve", 0, int)
     es_festivo = valor_contexto(info, "es_festivo", 0, int)
     num_eventos = valor_contexto(info, "num_eventos", 0, float)
-    mes_num = valor_contexto(info, "mes_num", 6, int)
+    mes_num = int(t["mes_num"])
 
     oferta_media = float(df_p2_contexto["oferta_inferida"].mean()) if not df_p2_contexto.empty else oferta
 
@@ -278,7 +315,7 @@ async def predict_taxi(
         "origen_id": int(zona_id),
         "hora": int(t["hora_int"]),
         "dia_semana": int(t["dia_semana"]),
-        "dia_mes": 15,
+        "dia_mes": int(t["dia_mes"]),
         "mes_num": int(mes_num),
         "es_finde": int(t["es_fin_semana"]),
 
@@ -312,11 +349,9 @@ async def predict_taxi(
 
     # Predecir probabilidad de alta demanda - modelo 2
     z_enc = transformar_label_encoder_seguro(app.encoder_p2, zona_id)
+    n_viajes = valor_contexto(info, "n_viajes", oferta, float)
 
     df_p2 = pd.DataFrame([{
-        "demanda_p1": demanda_pred,
-        "tasa_exito": valor_contexto(info, "tasa_exito", 0.0, float),
-        "espera_media": espera_media,
         "hora": int(t["hora_int"]),
         "dia_semana": int(t["dia_semana"]),
         "es_finde": int(t["es_fin_semana"]),
@@ -332,14 +367,14 @@ async def predict_taxi(
         "num_eventos": num_eventos,
         "oferta_inferida": oferta,
         "tasa_historica": tasa_historica,
+        "demanda_p1": demanda_pred,
+        "n_viajes": n_viajes,
+        "espera_media": espera_media,
         "zona_enc": z_enc
     }])
 
     # Colocamos las columnas en el orden esperado por el modelo
     cols_p2 = [
-        "demanda_p1",
-        "tasa_exito",
-        "espera_media",
         "hora",
         "dia_semana",
         "es_finde",
@@ -355,6 +390,9 @@ async def predict_taxi(
         "num_eventos",
         "oferta_inferida",
         "tasa_historica",
+        "demanda_p1",
+        "n_viajes",
+        "espera_media",
         "zona_enc"
     ]
 
@@ -393,7 +431,7 @@ async def predict_vtc(
     planificacion_hora: str = Form("actual")
 ):
     t = procesar_tiempo_despliegue(planificacion_hora)
-    info_p5 = obtener_contexto_p5(origen_id, t["hora_int"])
+    info_p5 = obtener_contexto_p5(origen_id, t)
 
     # Valores de contexto P5
     temp = valor_contexto(info_p5, "temp_c", 15.0, float)
@@ -403,7 +441,7 @@ async def predict_vtc(
     nieve = valor_contexto(info_p5, "nieve", 0, int)
     es_festivo = valor_contexto(info_p5, "es_festivo", 0, int)
     num_eventos = valor_contexto(info_p5, "num_eventos", 0, int)
-    mes_num = valor_contexto(info_p5, "mes_num", 6, int)
+    mes_num = int(t["mes_num"])
 
     hay_lluvia = 1 if lluvia == 1 or precipitation > 0 else 0
     hay_nieve = 1 if nieve == 1 else 0
@@ -466,7 +504,7 @@ async def predict_vtc(
     evento_tipo = (
         str(info_p5["evento_tipo"])
         if info_p5 is not None and "evento_tipo" in info_p5.index and pd.notna(info_p5["evento_tipo"])
-        else "Ninguno"
+        else "No hay"
     )
 
     franja_horaria = (
@@ -490,7 +528,7 @@ async def predict_vtc(
     )
 
     df_p5 = pd.DataFrame([{
-        "tipo_vehiculo": str(tipo_vehiculo),
+        "tipo_vehiculo": normalizar_tipo_vehiculo(tipo_vehiculo),
         "origen_zona": origen_zona,
         "origen_barrio": origen_barrio,
         "evento_tipo": evento_tipo,
