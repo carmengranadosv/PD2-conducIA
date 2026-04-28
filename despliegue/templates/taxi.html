@@ -1,3 +1,76 @@
+<<<<<<< HEAD
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ConducIA - Panel Taxi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <style>
+        .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
+        .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
+        .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
+        .main-nav a.active { background: #e63946; color: white; }
+        .panel-box { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); max-width: 700px; margin: 40px auto; }
+        .btn-analizar { background: #e63946; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; }
+        .decision-highlight { font-size: 1.5rem; font-weight: 700; color: #e63946; margin-top: 20px; text-transform: uppercase; border: 2px solid #e63946; padding: 15px; display: inline-block; width: 100%; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
+    <nav class="main-nav">
+        <a href="/">Inicio</a>
+        <a href="/taxi" class="active">Panel Taxi</a>
+        <a href="/vtc">Panel VTC</a>
+        <a href="/documentacion">Documentación</a>
+    </nav>
+    <div class="main-wrapper">
+        <div class="panel-box">
+            <h2>Panel Inteligente de Posicionamiento</h2>
+            <p style="color: #666; margin-bottom: 30px;">Análisis de demanda (RF), éxito de zona (MLP) y eficiencia de tráfico según el clima actual.</p>
+            
+    <form action="/taxi" method="post">
+        <div style="margin-bottom:25px;">
+            <label style="display:block; font-weight:bold; margin-bottom:10px;">Zona Actual</label>
+            <select name="zona_id" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
+                <option value="1">Newark Airport (EWR)</option>
+                <option value="132">JFK Airport</option>
+                <option value="138">LaGuardia Airport (LGA)</option>
+                <option value="161">Midtown Center</option>
+                <option value="230">Times Sq / Theatre District</option>
+                <option value="237">Upper East Side South</option>
+                <option value="79">East Village</option>
+                <option value="249">West Village</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom:25px;">
+            <label style="display:block; font-weight:bold; margin-bottom:10px;">Hora de Análisis</label>
+            <select name="planificacion_hora" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
+                <option value="actual">Ahora (Tiempo Real)</option>
+                {% for h in range(24) %}
+                <option value="{{ h }}">{{ h }}:00</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="btn-analizar">Analizar con modelos de ConducIA</button>
+    </form>
+            {% if mostrar_res %}
+            <div id="resTaxi" style="margin-top:30px; padding:25px; background:#fdfdfd; border-radius:10px; border: 1px solid #eee; text-align: center;">
+                <p><strong>Demanda Estimada (RF):</strong> {{ resultado.demanda_estimada }} viajes/h</p>
+                <p><strong>Probabilidad de Éxito (MLP):</strong> {{ resultado.exito_prob }}%</p>
+                
+                <div class="decision-highlight">
+                    RECOMENDACIÓN: {{ resultado.recomendacion }}
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</body>
+=======
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -72,4 +145,5 @@
         </div>
     </div>
 </body>
+>>>>>>> de3d4a3165409eb407b6b6882858774aaf703a69
 </html>
