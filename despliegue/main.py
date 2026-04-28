@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.concurrency import asynccontextmanager
+from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware
 
 # --- 1. CONFIGURACIÓN DE RENDIMIENTO ---
@@ -20,7 +20,8 @@ os.environ["XLA_PYTHON_CLIENT_ALLOC_FRACTION"] = ".10"
 # --- 2. DEFINICIÓN DE RUTAS Y DIRECTORIOS ---
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "modelos_finales"
-DATA_PATH = Path("/app/data/processed/tlc_clean/datos_final.parquet")
+DATA_FULL_PATH = Path("/app/data/processed/tlc_clean/datos_final.parquet")
+P2_FEATURES_DIR = Path("/app/data/processed/tlc_clean/problema2/features")
 
 # --- 3. CARGA DE MODELOS (LIFESPAN) ---
 @asynccontextmanager
@@ -58,7 +59,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 try:
     import pyarrow.parquet as pq
     dataset = pq.ParquetFile(DATA_PATH)
-    df_historico = next(dataset.iter_batches(batch_size=50000)).to_pandas()
+    df_historico = next(dataset.iter_batches(batch_size=100000)).to_pandas()
     print(f"✅ Dataset cargado correctamente.")
 except Exception as e:
     print(f"⚠️ Error cargando dataset: {e}")
@@ -83,6 +84,16 @@ def procesar_tiempo_despliegue(hora_usuario: str = "actual"):
         "hora_sen": hora_sen, "hora_cos": hora_cos,
         "dia_semana": dia_semana, "es_fin_semana": es_fin_semana
     }
+
+def obtener_contexto_zona(zona_id, h_int):
+    try:
+        mask = (df_historico["origen_id"] == zona_id) & (df_historico["hora"] == h_int)
+        filtrado = df_historico[mask]
+        if not filtrado.empty: return filtrado.iloc[0]
+        filtrado_z = df_historico[df_historico["origen_id"] == zona_id]
+        if not filtrado_z.empty: return filtrado_z.iloc[0]
+    except: pass
+    return None
 
 # --- 7. RUTAS GET (NAVEGACIÓN) ---
 @app.get("/", response_class=HTMLResponse)
@@ -121,62 +132,49 @@ async def pantalla_doc(request: Request):
 # --- 8. LÓGICA POST (PREDICCIONES) ---
 @app.post("/taxi", response_class=HTMLResponse)
 async def predict_taxi(request: Request, zona_id: int = Form(...), planificacion_hora: str = Form("actual")):
-    tiempo = procesar_tiempo_despliegue(planificacion_hora)
+    t = procesar_tiempo_despliegue(planificacion_hora)
+    info = obtener_contexto_zona(zona_id, t["hora_int"])
+    oferta = float(info["oferta_inferida"]) if info is not None else 1.0
+    temp = float(info["temp_c"]) if info is not None else 15.0
     
-    # Lógica de ejemplo para que los datos varíen según la zona
-    if zona_id == 132: # JFK
-        resultado = {"demanda_estimada": 85, "exito_prob": 94, "recomendacion": "ZONA CRÍTICA - ALTA DEMANDA"}
-    else:
-        resultado = {"demanda_estimada": 30, "exito_prob": 65, "recomendacion": "DEMANDA MODERADA"}
+    # P1
+    df_p1 = pd.DataFrame([{
+        "origen_id": zona_id, "hora": t["hora_int"], "dia_semana": t["dia_semana"], "dia_mes": 15, "mes_num": 6,
+        "es_finde": t["es_fin_semana"], "demanda": oferta, "lag_1h": oferta, "lag_2h": oferta, "lag_3h": oferta,
+        "lag_6h": oferta, "lag_12h": oferta, "lag_24h": oferta, "roll_mean_3h": oferta, "roll_std_3h": 0.1,
+        "roll_mean_24h": oferta, "roll_std_24h": 0.1, "media_hist": oferta, "temp_c": temp,
+        "precipitation": 0.0, "viento_kmh": 10.0, "velocidad_mph": 10.0, "lluvia": 0, "nieve": 0, "es_festivo": 0, "num_eventos": 0
+    }])
+    demanda_pred = float(app.modelo_p1.predict(df_p1)[0])
 
-    return templates.TemplateResponse(
-        request=request,
-        name="taxi.html",
-        context={
-            "request": request, 
-            "mostrar_res": True, 
-            "resultado": resultado,
-            "zona_seleccionada": zona_id,
-            "hora_seleccionada": planificacion_hora
-        }
-    )
+    # P2
+    cols_p2 = ['demanda_p1', 'temp_c', 'precipitation', 'viento_kmh', 'lluvia', 'nieve', 'es_festivo', 'num_eventos', 'hora', 'dia_semana', 'es_finde', 'mes_num', 'lag_1h', 'roll_mean_3h', 'roll_std_3h', 'roll_mean_24h', 'media_hist', 'velocidad_mph', 'zona_enc']
+    z_enc = app.encoder_p2.transform([zona_id])[0]
+    df_p2 = pd.DataFrame(0.1, index=[0], columns=cols_p2)
+    df_p2.update(pd.DataFrame([{"demanda_p1": demanda_pred, "temp_c": temp, "hora": t["hora_int"], "dia_semana": t["dia_semana"], "zona_enc": z_enc}]))
+    prob = float(app.modelo_p2.predict(app.scaler_p2.transform(df_p2.values), verbose=0)[0][0])
+
+    res = {"demanda_estimada": round(demanda_pred, 1), "exito_prob": round(prob*100, 1), "recomendacion": "ALTA" if prob > 0.6 else "MODERADA"}
+    return templates.TemplateResponse(request=request, name="taxi.html", context={"request": request, "mostrar_res": True, "resultado": res, "zona_seleccionada": zona_id, "hora_seleccionada": planificacion_hora})
 
 @app.post("/vtc", response_class=HTMLResponse)
-async def predict_vtc(request: Request, 
-                      origen_id: int = Form(...), 
-                      destino_id: int = Form(...), 
-                      precio_base: float = Form(...), 
-                      tipo_vehiculo: int = Form(...), 
-                      planificacion_hora: str = Form("actual")):
+async def predict_vtc(request: Request, origen_id: int = Form(...), destino_id: int = Form(...), precio_base: float = Form(...), tipo_vehiculo: int = Form(...), planificacion_hora: str = Form("actual")):
+    t = procesar_tiempo_despliegue(planificacion_hora)
     
-    tiempo = procesar_tiempo_despliegue(planificacion_hora)
+    # P4
+    z_idx = app.encoder_p4.transform([origen_id])
+    c_num = app.scaler_p4.transform([[15.0, 0.0, 10.0, 0, 0, 0, 0, 0, 0, t["dia_semana"], t["es_fin_semana"], t["hora_sen"], t["hora_cos"]]])
+    vel = float(app.modelo_p4.predict([z_idx, c_num], verbose=0)[0][0])
 
-    # Lógica de ejemplo para que varíe según el precio y origen
-    propina_est = round(precio_base * 0.18, 2) if origen_id == 132 else round(precio_base * 0.12, 2)
-    
-    resultado_VTC = {
-        "propina": propina_est,
-        "velocidad": "24.5" if planificacion_hora == "actual" else "15.8",
-        "encadenado": "ALTA" if precio_base > 20 else "BAJA",
-        "detalles": f"Analizando trayecto desde zona {origen_id} a {destino_id}.",
-        "decision": "ACEPTAR" if precio_base > 15 else "RECHAZAR"
-    }
+    # P5
+    df_p5 = pd.DataFrame([{
+        "tipo_vehiculo": int(tipo_vehiculo), "origen_zona": "Midtown Center", "origen_barrio": "Manhattan", "evento_tipo": "Ninguno", "franja_horaria": "tarde", "precio_base": float(precio_base), "hora_sen": float(t["hora_sen"]), "hora_cos": float(t["hora_cos"]), "es_fin_semana": int(t["es_fin_semana"]),
+        "num_pasajeros": 1, "velocidad_mph": vel, "lluvia": 0, "temp_c": 15.0, "es_festivo": 0, "distancia": 3.0, "nieve": 0, "espera_min": 1.0, "precipitation": 0.0, "trafico_denso": 0, "duracion_min": 10.0, "num_eventos": 0, "mes_num": 6, "hora": t["hora_int"], "rentabilidad_base_min": 1.0, "viento_kmh": 10.0, "precio_total_est": precio_base + 2.0, "dia_semana": t["dia_semana"]
+    }])
+    propina = float(app.modelo_p5.predict(df_p5)[0])
 
-    return templates.TemplateResponse(
-        request=request,
-        name="vtc.html",
-        context={
-            "request": request, 
-            "resultado": resultado_VTC, 
-            "seleccion": {
-                "origen": origen_id,
-                "destino": destino_id,
-                "precio": precio_base,
-                "vehiculo": tipo_vehiculo,
-                "hora": planificacion_hora
-            }
-        }
-    )
+    res = {"propina": round(propina, 2), "velocidad": round(vel, 1), "encadenado": "ALTA", "decision": "ACEPTAR" if propina > 2 else "RECHAZAR", "detalles": "Análisis OK"}
+    return templates.TemplateResponse(request=request, name="vtc.html", context={"request": request, "resultado": res, "seleccion": {"origen": origen_id, "destino": destino_id, "precio": precio_base, "vehiculo": tipo_vehiculo, "hora": planificacion_hora}})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
