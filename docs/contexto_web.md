@@ -130,6 +130,7 @@ Uso en VTC:
 
 - P4 predice velocidad usando zona, clima, eventos, hora y dia.
 - P5 predice propina usando precio introducido por el usuario mas contexto historico de origen, clima, duracion, distancia, espera y trafico.
+- P2 se reutiliza sobre el destino para estimar el potencial de retorno/encadenado al llegar.
 - Las columnas categoricas (`origen_zona`, `origen_barrio`, `evento_tipo`, `franja_horaria`) se calculan con la moda historica.
 
 Ejemplo conceptual:
@@ -138,7 +139,7 @@ Ejemplo conceptual:
 Origen 161, abril, viernes, 18:00, precio base 25.50
 ```
 
-La app busca:
+La app busca contexto historico del origen:
 
 ```text
 origen_id = 161
@@ -147,7 +148,14 @@ dia_semana = 4
 hora = 18
 ```
 
-Despues combina ese contexto historico con el precio que escribe el usuario.
+Despues combina ese contexto historico con el precio que escribe el usuario para estimar propina y velocidad. Si el usuario tambien selecciona destino, la app estima la hora de llegada con la duracion historica del servicio y aplica P2 sobre el destino:
+
+```text
+destino_id = zona de llegada
+hora = hora_salida + duracion_min historica
+```
+
+Ese resultado se muestra como `Potencial de Retorno en Destino`. No es una garantia de conseguir otro viaje; es una señal historica de si la zona de llegada suele tener buen potencial de demanda.
 
 ## Busqueda con fallbacks
 

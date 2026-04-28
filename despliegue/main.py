@@ -113,6 +113,7 @@ def procesar_tiempo_despliegue(hora_usuario: str = "actual"):
     es_fin_semana = 1 if dia_semana >= 5 else 0
 
     return {
+        "hora_float": hora_float,
         "hora_int": hora_int,
         "hora_sen": hora_sen,
         "hora_cos": hora_cos,
@@ -249,6 +250,138 @@ def normalizar_tipo_vehiculo(valor):
     }
     return mapa.get(str(valor).strip().lower(), str(valor))
 
+def desplazar_tiempo(t, minutos: float):
+    """Aproxima la hora de llegada manteniendo mes/dia del contexto actual."""
+    hora_float = float(t["hora_float"]) + max(float(minutos), 0.0) / 60.0
+    dias_extra = int(hora_float // 24)
+    hora_float = hora_float % 24
+    dia_semana = (int(t["dia_semana"]) + dias_extra) % 7
+    es_fin_semana = 1 if dia_semana >= 5 else 0
+
+    return {
+        "hora_float": hora_float,
+        "hora_int": int(hora_float),
+        "hora_sen": float(np.sin(2 * np.pi * hora_float / 24)),
+        "hora_cos": float(np.cos(2 * np.pi * hora_float / 24)),
+        "dia_semana": dia_semana,
+        "dia_mes": int(t["dia_mes"]),
+        "mes_num": int(t["mes_num"]),
+        "es_fin_semana": es_fin_semana,
+        "es_finde": es_fin_semana,
+    }
+
+def predecir_potencial_zona(zona_id: int, t):
+    """Predice demanda P1 y probabilidad P2 para una zona y momento."""
+    info = obtener_contexto_zona(zona_id, t)
+
+    oferta = valor_contexto(info, "oferta_inferida", 1.0, float)
+    tasa_historica = valor_contexto(info, "tasa_historica", 1.0, float)
+    espera_media = valor_contexto(info, "espera_media", 0.0, float)
+
+    temp = valor_contexto(info, "temp_c", 15.0, float)
+    precipitation = valor_contexto(info, "precipitation", 0.0, float)
+    viento_kmh = valor_contexto(info, "viento_kmh", 10.0, float)
+    lluvia = valor_contexto(info, "lluvia", 0.0, float)
+    nieve = valor_contexto(info, "nieve", 0.0, float)
+    es_festivo = valor_contexto(info, "es_festivo", 0.0, float)
+    num_eventos = valor_contexto(info, "num_eventos", 0, float)
+    mes_num = int(t["mes_num"])
+
+    oferta_media = float(df_p2_contexto["oferta_inferida"].mean()) if not df_p2_contexto.empty else oferta
+
+    df_p1 = pd.DataFrame([{
+        "origen_id": int(zona_id),
+        "hora": int(t["hora_int"]),
+        "dia_semana": int(t["dia_semana"]),
+        "dia_mes": int(t["dia_mes"]),
+        "mes_num": int(mes_num),
+        "es_finde": int(t["es_fin_semana"]),
+
+        "demanda": oferta,
+        "lag_1h": oferta,
+        "lag_2h": oferta,
+        "lag_3h": oferta,
+        "lag_6h": oferta,
+        "lag_12h": oferta,
+        "lag_24h": tasa_historica * oferta_media,
+
+        "roll_mean_3h": oferta,
+        "roll_std_3h": oferta * 0.1,
+        "roll_mean_24h": oferta,
+        "roll_std_24h": oferta * 0.1,
+        "media_hist": tasa_historica * oferta_media,
+
+        "temp_c": temp,
+        "precipitation": precipitation,
+        "viento_kmh": viento_kmh,
+        "velocidad_mph": viento_kmh * 0.621,
+
+        "lluvia": lluvia,
+        "nieve": nieve,
+        "es_festivo": es_festivo,
+        "num_eventos": num_eventos
+    }])
+
+    demanda_pred = float(app.modelo_p1.predict(df_p1)[0])
+    demanda_pred = max(demanda_pred, 0.0)
+
+    z_enc = transformar_label_encoder_seguro(app.encoder_p2, zona_id)
+    n_viajes = valor_contexto(info, "n_viajes", oferta, float)
+
+    cols_p2 = [
+        "hora",
+        "dia_semana",
+        "es_finde",
+        "hora_sen",
+        "hora_cos",
+        "mes_num",
+        "temp_c",
+        "precipitation",
+        "viento_kmh",
+        "lluvia",
+        "nieve",
+        "es_festivo",
+        "num_eventos",
+        "oferta_inferida",
+        "tasa_historica",
+        "demanda_p1",
+        "n_viajes",
+        "espera_media",
+        "zona_enc"
+    ]
+
+    df_p2 = pd.DataFrame([{
+        "hora": int(t["hora_int"]),
+        "dia_semana": int(t["dia_semana"]),
+        "es_finde": int(t["es_fin_semana"]),
+        "hora_sen": float(t["hora_sen"]),
+        "hora_cos": float(t["hora_cos"]),
+        "mes_num": int(mes_num),
+        "temp_c": temp,
+        "precipitation": precipitation,
+        "viento_kmh": viento_kmh,
+        "lluvia": lluvia,
+        "nieve": nieve,
+        "es_festivo": es_festivo,
+        "num_eventos": num_eventos,
+        "oferta_inferida": oferta,
+        "tasa_historica": tasa_historica,
+        "demanda_p1": demanda_pred,
+        "n_viajes": n_viajes,
+        "espera_media": espera_media,
+        "zona_enc": z_enc
+    }])
+
+    df_p2 = df_p2[cols_p2].fillna(0).astype(np.float32)
+    X_p2 = app.scaler_p2.transform(df_p2.values)
+    prob = float(app.modelo_p2.predict(X_p2, verbose=0)[0][0])
+
+    return {
+        "demanda_estimada": demanda_pred,
+        "exito_prob": prob,
+        "contexto": info,
+    }
+
 # --- 7. RUTAS GET (NAVEGACIÓN) ---
 @app.get("/", response_class=HTMLResponse)
 async def pantalla_inicio(request: Request):
@@ -292,114 +425,9 @@ async def predict_taxi(
     planificacion_hora: str = Form("actual")
 ):
     t = procesar_tiempo_despliegue(planificacion_hora)
-    info = obtener_contexto_zona(zona_id, t)
-
-    # Valores de contexto P2
-    oferta = valor_contexto(info, "oferta_inferida", 1.0, float)
-    tasa_historica = valor_contexto(info, "tasa_historica", 1.0, float)
-    espera_media = valor_contexto(info, "espera_media", 0.0, float)
-
-    temp = valor_contexto(info, "temp_c", 15.0, float)
-    precipitation = valor_contexto(info, "precipitation", 0.0, float)
-    viento_kmh = valor_contexto(info, "viento_kmh", 10.0, float)
-    lluvia = valor_contexto(info, "lluvia", 0, int)
-    nieve = valor_contexto(info, "nieve", 0, int)
-    es_festivo = valor_contexto(info, "es_festivo", 0, int)
-    num_eventos = valor_contexto(info, "num_eventos", 0, float)
-    mes_num = int(t["mes_num"])
-
-    oferta_media = float(df_p2_contexto["oferta_inferida"].mean()) if not df_p2_contexto.empty else oferta
-
-    # Predecir la demanda - modelo 1
-    df_p1 = pd.DataFrame([{
-        "origen_id": int(zona_id),
-        "hora": int(t["hora_int"]),
-        "dia_semana": int(t["dia_semana"]),
-        "dia_mes": int(t["dia_mes"]),
-        "mes_num": int(mes_num),
-        "es_finde": int(t["es_fin_semana"]),
-
-        "demanda": oferta,
-        "lag_1h": oferta,
-        "lag_2h": oferta,
-        "lag_3h": oferta,
-        "lag_6h": oferta,
-        "lag_12h": oferta,
-        "lag_24h": tasa_historica * oferta_media,
-
-        "roll_mean_3h": oferta,
-        "roll_std_3h": oferta * 0.1,
-        "roll_mean_24h": oferta,
-        "roll_std_24h": oferta * 0.1,
-        "media_hist": tasa_historica * oferta_media,
-
-        "temp_c": temp,
-        "precipitation": precipitation,
-        "viento_kmh": viento_kmh,
-        "velocidad_mph": viento_kmh * 0.621,
-
-        "lluvia": lluvia,
-        "nieve": nieve,
-        "es_festivo": es_festivo,
-        "num_eventos": num_eventos
-    }])
-
-    demanda_pred = float(app.modelo_p1.predict(df_p1)[0])
-    demanda_pred = max(demanda_pred, 0.0)
-
-    # Predecir probabilidad de alta demanda - modelo 2
-    z_enc = transformar_label_encoder_seguro(app.encoder_p2, zona_id)
-    n_viajes = valor_contexto(info, "n_viajes", oferta, float)
-
-    df_p2 = pd.DataFrame([{
-        "hora": int(t["hora_int"]),
-        "dia_semana": int(t["dia_semana"]),
-        "es_finde": int(t["es_fin_semana"]),
-        "hora_sen": float(t["hora_sen"]),
-        "hora_cos": float(t["hora_cos"]),
-        "mes_num": int(mes_num),
-        "temp_c": temp,
-        "precipitation": precipitation,
-        "viento_kmh": viento_kmh,
-        "lluvia": lluvia,
-        "nieve": nieve,
-        "es_festivo": es_festivo,
-        "num_eventos": num_eventos,
-        "oferta_inferida": oferta,
-        "tasa_historica": tasa_historica,
-        "demanda_p1": demanda_pred,
-        "n_viajes": n_viajes,
-        "espera_media": espera_media,
-        "zona_enc": z_enc
-    }])
-
-    # Colocamos las columnas en el orden esperado por el modelo
-    cols_p2 = [
-        "hora",
-        "dia_semana",
-        "es_finde",
-        "hora_sen",
-        "hora_cos",
-        "mes_num",
-        "temp_c",
-        "precipitation",
-        "viento_kmh",
-        "lluvia",
-        "nieve",
-        "es_festivo",
-        "num_eventos",
-        "oferta_inferida",
-        "tasa_historica",
-        "demanda_p1",
-        "n_viajes",
-        "espera_media",
-        "zona_enc"
-    ]
-
-    df_p2 = df_p2[cols_p2].fillna(0).astype(np.float32)
-
-    X_p2 = app.scaler_p2.transform(df_p2.values)
-    prob = float(app.modelo_p2.predict(X_p2, verbose=0)[0][0])
+    potencial = predecir_potencial_zona(zona_id, t)
+    demanda_pred = potencial["demanda_estimada"]
+    prob = potencial["exito_prob"]
 
     # Resultado y decisión
     res = {
@@ -437,14 +465,14 @@ async def predict_vtc(
     temp = valor_contexto(info_p5, "temp_c", 15.0, float)
     precipitation = valor_contexto(info_p5, "precipitation", 0.0, float)
     viento_kmh = valor_contexto(info_p5, "viento_kmh", 10.0, float)
-    lluvia = valor_contexto(info_p5, "lluvia", 0, int)
-    nieve = valor_contexto(info_p5, "nieve", 0, int)
-    es_festivo = valor_contexto(info_p5, "es_festivo", 0, int)
+    lluvia = valor_contexto(info_p5, "lluvia", 0.0, float)
+    nieve = valor_contexto(info_p5, "nieve", 0.0, float)
+    es_festivo = valor_contexto(info_p5, "es_festivo", 0.0, float)
     num_eventos = valor_contexto(info_p5, "num_eventos", 0, int)
     mes_num = int(t["mes_num"])
 
-    hay_lluvia = 1 if lluvia == 1 or precipitation > 0 else 0
-    hay_nieve = 1 if nieve == 1 else 0
+    hay_lluvia = 1 if lluvia > 0 or precipitation > 0 else 0
+    hay_nieve = 1 if nieve > 0 else 0
     
     # Predecir la velocidad - modelo 4
     z_idx = np.array(
@@ -517,15 +545,13 @@ async def predict_vtc(
     distancia = valor_contexto(info_p5, "distancia", 3.0, float)
     espera_min = valor_contexto(info_p5, "espera_min", 1.0, float)
     duracion_min = valor_contexto(info_p5, "duracion_min", 10.0, float)
-    trafico_denso = valor_contexto(info_p5, "trafico_denso", 0, int)
+    trafico_denso = valor_contexto(info_p5, "trafico_denso", 0.0, float)
     rentabilidad_base_min = valor_contexto(info_p5, "rentabilidad_base_min", 1.0, float)
 
-    precio_total_est = valor_contexto(
-        info_p5,
-        "precio_total_est",
-        float(precio_base) + 2.0,
-        float
-    )
+    precio_base_contexto = valor_contexto(info_p5, "precio_base", float(precio_base), float)
+    precio_total_contexto = valor_contexto(info_p5, "precio_total_est", float(precio_base) + 2.0, float)
+    extras_historicos = max(precio_total_contexto - precio_base_contexto, 0.0)
+    precio_total_est = float(precio_base) + extras_historicos
 
     df_p5 = pd.DataFrame([{
         "tipo_vehiculo": normalizar_tipo_vehiculo(tipo_vehiculo),
@@ -607,14 +633,30 @@ async def predict_vtc(
     propina = max(propina, 0.0)
 
     # Resultado y decisión
-    decision = "ACEPTAR" if propina > 2 else "RECHAZAR"
+    t_llegada = desplazar_tiempo(t, duracion_min)
+    retorno = predecir_potencial_zona(destino_id, t_llegada)
+    retorno_prob = float(retorno["exito_prob"])
+
+    propina_score = min(propina / 4.0, 1.0)
+    velocidad_score = min(vel / 20.0, 1.0)
+    rentabilidad_score = (
+        0.45 * propina_score
+        + 0.25 * velocidad_score
+        + 0.30 * retorno_prob
+    )
+    decision = "ACEPTAR" if rentabilidad_score >= 0.55 else "RECHAZAR"
 
     res = {
         "propina": round(propina, 2),
         "velocidad": round(vel, 1),
-        "encadenado": "ALTA" if propina > 2 and vel > 8 else "MODERADA",
+        "retorno_prob": round(retorno_prob * 100, 1),
+        "encadenado": "ALTA" if retorno_prob > 0.6 else "MODERADA",
+        "rentabilidad_score": round(rentabilidad_score * 100, 1),
         "decision": decision,
-        "detalles": "Análisis realizado con contexto histórico de la zona."
+        "detalles": (
+            f"Retorno calculado en destino a las {t_llegada['hora_int']}:00 "
+            "con contexto histórico comparable."
+        )
     }
 
     return templates.TemplateResponse(
