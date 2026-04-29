@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import requests
 import pyarrow.parquet as pq
+import zipfile
 
 # 1. CONFIGURACIÓN DE RUTAS
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -14,10 +15,13 @@ DATA_ROOT = Path(os.getenv("CONDUCIA_DATA_DIR", str(PROJECT_ROOT / "data")))
 DATA_PATH = DATA_ROOT / "processed/tlc_clean/datos_final.parquet"
 EXTERNAL_DIR = DATA_ROOT / "external"
 SHAPEFILE_PATH = EXTERNAL_DIR / "taxi_zones.shp"
+SHAPEFILE_PATH_ALT = EXTERNAL_DIR / "taxi_zones" / "taxi_zones.shp"
 GEOJSON_LOCAL_PATH = EXTERNAL_DIR / "nyc_boroughs.geojson"
+TAXI_ZONES_GEOJSON_PATH = EXTERNAL_DIR / "taxi_zones.geojson"
 MAP_OUTPUT_PATH = DATA_ROOT / "funcionalidades" / "mapa_poder_barrios.html"
 
 GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/new-york-city-boroughs.geojson"
+TAXI_ZONES_ZIP_URL = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zones.zip"
 
 def obtener_geojson(url, local_path):
     """Descarga el GeoJSON si no existe y lo carga con codificación UTF-8."""
@@ -31,6 +35,20 @@ def obtener_geojson(url, local_path):
     
     with open(local_path, 'r', encoding='utf-8') as f:
         return json.load(f)
+
+
+def descargar_zip_taxi_zones():
+    """Descarga y extrae taxi_zones.zip oficial de TLC en data/external."""
+    EXTERNAL_DIR.mkdir(parents=True, exist_ok=True)
+    zip_path = EXTERNAL_DIR / "taxi_zones.zip"
+    print(f"Descargando Taxi Zones desde {TAXI_ZONES_ZIP_URL}...")
+    response = requests.get(TAXI_ZONES_ZIP_URL, timeout=30)
+    response.raise_for_status()
+    with open(zip_path, "wb") as f:
+        f.write(response.content)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(EXTERNAL_DIR)
+    print("Taxi Zones descargado y extraído en data/external.")
     
 def cargar_geojson_zonas_tlc(path):
     """Convierte el Shapefile de la TLC a GeoJSON."""
@@ -44,6 +62,70 @@ def cargar_geojson_zonas_tlc(path):
     if str(gdf.crs) != "EPSG:4326":
         gdf = gdf.to_crs("EPSG:4326")
     return json.loads(gdf.to_json())
+
+
+def seleccionar_shapefile_tlc() -> Path | None:
+    """Elige el shapefile TLC más completo disponible."""
+    candidatos = [SHAPEFILE_PATH_ALT, SHAPEFILE_PATH]
+    for shp in candidatos:
+        if not shp.exists():
+            continue
+        dbf = shp.with_suffix(".dbf")
+        shx = shp.with_suffix(".shx")
+        if dbf.exists() and shx.exists():
+            return shp
+    for shp in candidatos:
+        if shp.exists():
+            return shp
+    return None
+
+
+def geojson_tiene_location_id(geojson_obj: dict) -> bool:
+    try:
+        features = geojson_obj.get("features", [])
+        if not features:
+            return False
+        props = features[0].get("properties", {})
+        return "LocationID" in props
+    except Exception:
+        return False
+
+
+def obtener_geojson_zonas_tlc():
+    """
+    Intenta cargar zonas TLC desde shapefile local.
+    Si no hay LocationID, usa fallback GeoJSON oficial cacheado.
+    """
+    shp_path = seleccionar_shapefile_tlc()
+    if shp_path is not None:
+        try:
+            geo = cargar_geojson_zonas_tlc(shp_path)
+            if geojson_tiene_location_id(geo):
+                return geo
+            print(
+                "⚠️ Shapefile sin 'LocationID'. "
+                "Intentando descargar shapefile oficial TLC..."
+            )
+        except Exception as e:
+            print(f"⚠️ Error leyendo shapefile TLC ({e}). Intentando descarga oficial...")
+
+    try:
+        descargar_zip_taxi_zones()
+        shp_path = seleccionar_shapefile_tlc()
+        if shp_path is not None:
+            geo = cargar_geojson_zonas_tlc(shp_path)
+            if geojson_tiene_location_id(geo):
+                return geo
+        # Ultimo fallback: geojson local si existe y tiene LocationID
+        if TAXI_ZONES_GEOJSON_PATH.exists():
+            geo = obtener_geojson("", TAXI_ZONES_GEOJSON_PATH)
+            if geojson_tiene_location_id(geo):
+                return geo
+        print("⚠️ No hay geometría TLC con LocationID tras los intentos de recuperación.")
+        return None
+    except Exception as e:
+        print(f"⚠️ No se pudo recuperar geometría TLC detallada: {e}")
+        return None
 
 def normalize(col):
     """Función para normalizar una columna entre 0 y 1"""
@@ -125,27 +207,9 @@ def generar_mapa_plotly():
     # 1. Cargar geometrías
     print("Cargando geometrías...")
     geo_barrios = obtener_geojson(GEOJSON_URL, GEOJSON_LOCAL_PATH)
-    geo_zonas_tlc = None
-    if SHAPEFILE_PATH.exists():
-        try:
-            geo_zonas_tlc = cargar_geojson_zonas_tlc(SHAPEFILE_PATH)
-            props = geo_zonas_tlc.get("features", [{}])[0].get("properties", {})
-            if "LocationID" not in props:
-                print(
-                    "⚠️ El shapefile no contiene 'LocationID'. "
-                    "No se puede habilitar vista detallada por zonas TLC."
-                )
-                geo_zonas_tlc = None
-        except Exception as e:
-            print(
-                f"⚠️ No se pudo cargar shapefile TLC ({e}). "
-                "Se generará solo la vista por barrios."
-            )
-    else:
-        print(
-            f"⚠️ No se encontró {SHAPEFILE_PATH}. "
-            "Se generará solo la vista por barrios."
-        )
+    geo_zonas_tlc = obtener_geojson_zonas_tlc()
+    if geo_zonas_tlc is None:
+        print("⚠️ No habrá vista detallada TLC. Se mostrará solo barrios.")
 
     # 2. Calcular índice económico
     print("Calculando métricas por barrios y zonas (modo eficiente)...")
