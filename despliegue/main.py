@@ -5,6 +5,7 @@ os.environ["XLA_PYTHON_CLIENT_ALLOC_FRACTION"] = ".10"
 
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 import joblib
 import keras
 import pandas as pd
@@ -16,6 +17,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware
+from src.funcionalidades.demanda_zona_franja import (
+    cargar_resumen_para_consulta,
+    consultar_demanda,
+)
 
 # --- 2. DEFINICIÓN DE RUTAS Y DIRECTORIOS ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -30,6 +35,9 @@ P2_CONTEXT_PATH = CONTEXT_DIR / "contexto_p2.parquet"
 P5_CONTEXT_PATH = CONTEXT_DIR / "contexto_p5.parquet"
 P2_FALLBACK_PATH = DATA_ROOT / "processed/tlc_clean/problema2/features/train.parquet"
 P5_FALLBACK_PATH = DATA_ROOT / "processed/tlc_clean/problema5/train.parquet"
+FUNCIONALIDADES_DIR = DATA_ROOT / "funcionalidades"
+MAPA_HTML_PATH = FUNCIONALIDADES_DIR / "mapa_poder_barrios.html"
+DEMANDA_CACHE_DIR = CONTEXT_DIR / "funcionalidades"
 
 # --- 3. CARGA DE MODELOS (LIFESPAN) ---
 @asynccontextmanager
@@ -416,6 +424,135 @@ async def panel_vtc(request: Request):
 @app.get("/documentacion", response_class=HTMLResponse)
 async def pantalla_doc(request: Request):
     return templates.TemplateResponse(request=request, name="documentacion.html")
+
+
+def obtener_resumen_demanda_contexto():
+    """Usa contexto_p2 como fuente ligera para la funcionalidad zona-franja."""
+    try:
+        return cargar_resumen_para_consulta(
+            out_dir=DEMANDA_CACHE_DIR,
+            inputs=[P2_CONTEXT_PATH],
+        )
+    except Exception as e:
+        print(f"⚠️ Error cargando resumen demanda_zona_franja: {e}")
+        return pd.DataFrame()
+
+
+def obtener_opciones_zona(resumen: pd.DataFrame):
+    if resumen.empty:
+        return []
+    cols = [c for c in ["origen_id", "origen_zona", "origen_barrio"] if c in resumen.columns]
+    if "origen_id" not in cols:
+        return []
+    base = resumen[cols].drop_duplicates().sort_values("origen_id")
+    opciones = []
+    for _, row in base.iterrows():
+        zona = str(row["origen_zona"]) if "origen_zona" in base.columns and pd.notna(row.get("origen_zona")) else "Zona"
+        barrio = str(row["origen_barrio"]) if "origen_barrio" in base.columns and pd.notna(row.get("origen_barrio")) else ""
+        label = f"{int(row['origen_id'])} · {zona}"
+        if barrio:
+            label += f" ({barrio})"
+        opciones.append({"id": int(row["origen_id"]), "label": label})
+    return opciones
+
+
+@app.get("/funcionalidades", response_class=HTMLResponse)
+async def pantalla_funcionalidades(request: Request):
+    resumen = obtener_resumen_demanda_contexto()
+    opciones = obtener_opciones_zona(resumen)
+    resultados = []
+    if not resumen.empty:
+        resultados = (
+            resumen[resumen["nivel_demanda"] == "alta"]
+            .nlargest(20, "demanda_media")
+            .to_dict(orient="records")
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="funcionalidades.html",
+        context={
+            "request": request,
+            "mapa_disponible": MAPA_HTML_PATH.exists(),
+            "filtros": {"top": 20},
+            "resultados": resultados,
+            "zona_options": opciones,
+            "error": None,
+        },
+    )
+
+
+@app.post("/funcionalidades", response_class=HTMLResponse)
+async def consultar_funcionalidades(
+    request: Request,
+    zona_id: Optional[str] = Form(None),
+    zona: Optional[str] = Form(None),
+    franja: Optional[str] = Form(None),
+    nivel: Optional[str] = Form(None),
+    demanda_min: Optional[str] = Form(None),
+    demanda_max: Optional[str] = Form(None),
+    top: int = Form(20),
+):
+    filtros = {
+        "zona_id": (zona_id or "").strip(),
+        "zona": (zona or "").strip(),
+        "franja": (franja or "").strip(),
+        "nivel": (nivel or "").strip(),
+        "demanda_min": (demanda_min or "").strip(),
+        "demanda_max": (demanda_max or "").strip(),
+        "top": top,
+    }
+
+    try:
+        resumen = obtener_resumen_demanda_contexto()
+        if resumen.empty:
+            raise ValueError("No se pudo cargar el resumen de demanda desde contexto_p2.")
+        opciones = obtener_opciones_zona(resumen)
+
+        zona_consulta = filtros["zona_id"] if filtros["zona_id"] else (filtros["zona"] or None)
+
+        if not any([zona_consulta, filtros["franja"], filtros["nivel"], filtros["demanda_min"], filtros["demanda_max"]]):
+            resultado = resumen.nlargest(int(top), "demanda_media")
+        else:
+            resultado = consultar_demanda(
+                resumen=resumen,
+                zona=zona_consulta,
+                franja=filtros["franja"] or None,
+                nivel=filtros["nivel"] or None,
+                demanda_min=float(filtros["demanda_min"]) if filtros["demanda_min"] else None,
+                demanda_max=float(filtros["demanda_max"]) if filtros["demanda_max"] else None,
+                top=int(top),
+            )
+
+        resultados = resultado.to_dict(orient="records")
+        error = None
+    except Exception as e:
+        resultados = []
+        opciones = []
+        error = str(e)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="funcionalidades.html",
+        context={
+            "request": request,
+            "mapa_disponible": MAPA_HTML_PATH.exists(),
+            "filtros": filtros,
+            "resultados": resultados,
+            "zona_options": opciones,
+            "error": error,
+        },
+    )
+
+
+@app.get("/funcionalidades/mapa", response_class=HTMLResponse)
+async def ver_mapa_funcionalidades():
+    if not MAPA_HTML_PATH.exists():
+        return HTMLResponse(
+            "<h3>Mapa no disponible.</h3>"
+            "<p>Generalo con: uv run python -m src.funcionalidades.mapa_coropletico</p>",
+            status_code=404,
+        )
+    return HTMLResponse(MAPA_HTML_PATH.read_text(encoding="utf-8"))
 
 # --- 8. LÓGICA POST (PREDICCIONES) ---
 @app.post("/taxi", response_class=HTMLResponse)

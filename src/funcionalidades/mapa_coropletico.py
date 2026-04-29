@@ -3,16 +3,19 @@ import pandas as pd
 import geopandas as gpd
 import json
 from pathlib import Path
+import os
 import requests
+import pyarrow.parquet as pq
 
 # 1. CONFIGURACIÓN DE RUTAS
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_ROOT = Path(os.getenv("CONDUCIA_DATA_DIR", str(PROJECT_ROOT / "data")))
 
-DATA_PATH = PROJECT_ROOT / "data/processed/tlc_clean/datos_final.parquet"
-EXTERNAL_DIR = PROJECT_ROOT / "data" / "external"
+DATA_PATH = DATA_ROOT / "processed/tlc_clean/datos_final.parquet"
+EXTERNAL_DIR = DATA_ROOT / "external"
 SHAPEFILE_PATH = EXTERNAL_DIR / "taxi_zones.shp"
 GEOJSON_LOCAL_PATH = EXTERNAL_DIR / "nyc_boroughs.geojson"
-MAP_OUTPUT_PATH = PROJECT_ROOT / "data" / "funcionalidades" / "mapa_poder_barrios.html"
+MAP_OUTPUT_PATH = DATA_ROOT / "funcionalidades" / "mapa_poder_barrios.html"
 
 GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/new-york-city-boroughs.geojson"
 
@@ -21,7 +24,8 @@ def obtener_geojson(url, local_path):
     if not local_path.exists():
         print(f"Descargando GeoJSON desde {url}...")
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        response = requests.get(url)
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
         with open(local_path, 'w', encoding='utf-8') as f:
             f.write(response.text)
     
@@ -30,9 +34,14 @@ def obtener_geojson(url, local_path):
     
 def cargar_geojson_zonas_tlc(path):
     """Convierte el Shapefile de la TLC a GeoJSON."""
+    # Intenta regenerar .shx si falta (GDAL/OGR).
+    os.environ.setdefault("SHAPE_RESTORE_SHX", "YES")
     gdf = gpd.read_file(path)
+    # Si no trae CRS en el shapefile, asumimos WGS84 para visualización web.
+    if gdf.crs is None:
+        gdf = gdf.set_crs("EPSG:4326")
     # Asegurar que el sistema de coordenadas sea WGS84 para Plotly
-    if gdf.crs != "EPSG:4326":
+    if str(gdf.crs) != "EPSG:4326":
         gdf = gdf.to_crs("EPSG:4326")
     return json.loads(gdf.to_json())
 
@@ -62,17 +71,86 @@ def calcular_indice_economico(df, columna):
     
     return stats
 
-def generar_mapa_plotly():
+def calcular_indice_economico_parquet(path, columna):
+    """Calcula el indice leyendo solo columnas necesarias por row groups."""
+    parquet = pq.ParquetFile(path)
+    cols = set(parquet.schema_arrow.names)
+    necesarias = {columna, "propina", "num_pasajeros"}
+    if not necesarias.issubset(cols):
+        raise ValueError(
+            f"{path} no contiene columnas necesarias: {sorted(necesarias)}"
+        )
 
-    # 1. Cargar datos 
-    print("Cargando datos y procesando geometrías...")
-    df = pd.read_parquet(DATA_PATH)
+    partes = []
+    for i in range(parquet.metadata.num_row_groups):
+        chunk = parquet.read_row_group(
+            i, columns=[columna, "propina", "num_pasajeros"]
+        ).to_pandas()
+        chunk = chunk.dropna(subset=[columna])
+        stats = (
+            chunk.groupby(columna, observed=True)
+            .agg(
+                propina_sum=("propina", "sum"),
+                pasajeros_sum=("num_pasajeros", "sum"),
+                volumen_viajes=(columna, "size"),
+            )
+            .reset_index()
+        )
+        partes.append(stats)
+
+    if not partes:
+        return pd.DataFrame(columns=[columna, "Poder_Adquisitivo"])
+
+    agregado = (
+        pd.concat(partes, ignore_index=True)
+        .groupby(columna, observed=True)
+        .agg(
+            propina_sum=("propina_sum", "sum"),
+            pasajeros_sum=("pasajeros_sum", "sum"),
+            volumen_viajes=("volumen_viajes", "sum"),
+        )
+        .reset_index()
+    )
+
+    agregado["propina_media"] = agregado["propina_sum"] / agregado["volumen_viajes"]
+    agregado["pasajeros_medios"] = agregado["pasajeros_sum"] / agregado["volumen_viajes"]
+    agregado["Poder_Adquisitivo"] = (
+        normalize(agregado["propina_media"]) * 0.4
+        + normalize(agregado["pasajeros_medios"]) * 0.3
+        + normalize(agregado["volumen_viajes"]) * 0.3
+    ) * 100
+    return agregado[[columna, "Poder_Adquisitivo"]]
+
+def generar_mapa_plotly():
+    # 1. Cargar geometrías
+    print("Cargando geometrías...")
     geo_barrios = obtener_geojson(GEOJSON_URL, GEOJSON_LOCAL_PATH)
-    geo_zonas_tlc = cargar_geojson_zonas_tlc(SHAPEFILE_PATH)
+    geo_zonas_tlc = None
+    if SHAPEFILE_PATH.exists():
+        try:
+            geo_zonas_tlc = cargar_geojson_zonas_tlc(SHAPEFILE_PATH)
+            props = geo_zonas_tlc.get("features", [{}])[0].get("properties", {})
+            if "LocationID" not in props:
+                print(
+                    "⚠️ El shapefile no contiene 'LocationID'. "
+                    "No se puede habilitar vista detallada por zonas TLC."
+                )
+                geo_zonas_tlc = None
+        except Exception as e:
+            print(
+                f"⚠️ No se pudo cargar shapefile TLC ({e}). "
+                "Se generará solo la vista por barrios."
+            )
+    else:
+        print(
+            f"⚠️ No se encontró {SHAPEFILE_PATH}. "
+            "Se generará solo la vista por barrios."
+        )
 
     # 2. Calcular índice económico
-    stats_barrios = calcular_indice_economico(df, "origen_barrio")
-    stats_zonas = calcular_indice_economico(df, "origen_id")
+    print("Calculando métricas por barrios y zonas (modo eficiente)...")
+    stats_barrios = calcular_indice_economico_parquet(DATA_PATH, "origen_barrio")
+    stats_zonas = calcular_indice_economico_parquet(DATA_PATH, "origen_id")
 
     # 6. CREAR EL MAPA COROPLÉTICO
     print("Generando mapa interactivo...")
@@ -92,6 +170,34 @@ def generar_mapa_plotly():
     )
 
     # Añadimos los botones para cambiar entre Barrios y Zonas TLC
+    botones = [
+        dict(
+            label="Ver por Barrios",
+            method="restyle",
+            args=[{
+                "z": [stats_barrios["Poder_Adquisitivo"].tolist()],
+                "locations": [stats_barrios["origen_barrio"].tolist()],
+                "geojson": geo_barrios,
+                "featureidkey": "properties.name"
+            }]
+        )
+    ]
+    if geo_zonas_tlc is not None:
+        stats_zonas = stats_zonas.copy()
+        stats_zonas["origen_id"] = stats_zonas["origen_id"].astype(int)
+        botones.append(
+            dict(
+                label="Ver por Zonas TLC (Detallado)",
+                method="restyle",
+                args=[{
+                    "z": [stats_zonas["Poder_Adquisitivo"].tolist()],
+                    "locations": [stats_zonas["origen_id"].astype(str).tolist()],
+                    "geojson": geo_zonas_tlc,
+                    "featureidkey": "properties.LocationID"
+                }]
+            )
+        )
+
     fig.update_layout(
         title={'text': "Análisis de Poder Adquisitivo NYC", 'x': 0.5, 'xanchor': 'center'},
         updatemenus=[
@@ -99,37 +205,16 @@ def generar_mapa_plotly():
                 type="buttons",
                 direction="right",
                 x=0.5, xanchor="center", y=1.05,
-                buttons=[
-                    dict(
-                        label="Ver por Barrios",
-                        method="restyle",
-                        args=[{
-                            "z": [stats_barrios["Poder_Adquisitivo"].tolist()],
-                            "locations": [stats_barrios["origen_barrio"].tolist()],
-                            "geojson": geo_barrios,
-                            "featureidkey": "properties.name"
-                        }]
-                    ),
-                    dict(
-                        label="Ver por Zonas TLC (Detallado)",
-                        method="restyle",
-                        args=[{
-                            "z": [stats_zonas["Poder_Adquisitivo"].tolist()],
-                            "locations": [stats_zonas["origen_id"].tolist()],
-                            "geojson": geo_zonas_tlc,
-                            "featureidkey": "properties.LocationID" # Clave del Shapefile que subiste
-                        }]
-                    )
-                ]
+                buttons=botones
             )
         ],
         margin={"r":0, "t":80, "l":0, "b":0}
     )
 
-    # Mostrar y Guardar
+    # Guardar (sin fig.show para evitar problemas en entorno headless/Docker)
+    MAP_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(MAP_OUTPUT_PATH)
     print(f"Mapa guardado en: {MAP_OUTPUT_PATH}")
-    fig.show()
 
 if __name__ == "__main__":
     generar_mapa_plotly()

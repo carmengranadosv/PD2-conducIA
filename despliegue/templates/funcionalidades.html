@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConducIA - Funcionalidades</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        .top-bar { background: #222; color: white; padding: 10px 0; text-align: center; font-family: 'Montserrat', sans-serif; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
+        .main-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 15px 0; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; gap: 30px; }
+        .main-nav a { text-decoration: none; color: #444; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; padding: 8px 16px; border-radius: 20px; }
+        .main-nav a.active { background: #e63946; color: white; }
+        .layout { max-width: 1200px; margin: 30px auto; padding: 0 20px 40px; font-family: 'Montserrat', sans-serif; }
+        .panel { background: #fff; border-radius: 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.06); padding: 24px; margin-bottom: 24px; }
+        .map-frame { width: 100%; height: 560px; border: 1px solid #ddd; border-radius: 10px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+        .field { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .field-wrap label { display: block; font-weight: 700; margin-bottom: 6px; font-size: 0.92rem; }
+        .hint { color: #666; font-size: 0.82rem; margin-top: 4px; }
+        .btn { margin-top: 14px; background: #222; color: white; border: none; border-radius: 24px; padding: 12px 22px; cursor: pointer; font-weight: 700; }
+        .btn:hover { background: #e63946; }
+        .error { color: #b00020; font-weight: 700; }
+        .help-box { border-left: 4px solid #e63946; background: #fff6f6; padding: 14px; border-radius: 8px; margin-top: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.92rem; }
+        th, td { border-bottom: 1px solid #eee; text-align: left; padding: 9px; }
+        th { background: #f7f7f7; }
+    </style>
+</head>
+<body>
+    <header class="top-bar"><span>ConducIA · Intelligence for Urban Mobility</span></header>
+    <nav class="main-nav">
+        <a href="/">Inicio</a>
+        <a href="/taxi">Panel Taxi</a>
+        <a href="/vtc">Panel VTC</a>
+        <a href="/funcionalidades" class="active">Funcionalidades</a>
+        <a href="/documentacion">Documentación</a>
+    </nav>
+
+    <main class="layout">
+        <section class="panel">
+            <h2>Mapa Coroplético</h2>
+            {% if mapa_disponible %}
+            <iframe class="map-frame" src="/funcionalidades/mapa"></iframe>
+            {% else %}
+            <p>No se encontró el mapa generado en <code>data/funcionalidades/mapa_poder_barrios.html</code>.</p>
+            <p>Genera el archivo con <code>uv run python -m src.funcionalidades.mapa_coropletico</code>.</p>
+            {% endif %}
+        </section>
+
+        <section class="panel">
+            <h2>Demanda por Zona y Franja</h2>
+            <p style="color:#555; margin-top: 0;">Consulta rápida para ver dónde suele haber más viajes según zona y momento del día.</p>
+            <form method="post" action="/funcionalidades">
+                <div class="grid-2">
+                    <div class="field-wrap">
+                        <label for="zona_id">Zona (recomendado)</label>
+                        <select id="zona_id" class="field" name="zona_id">
+                        {% set zid = filtros.zona_id if filtros else '' %}
+                        <option value="">Selecciona una zona</option>
+                        {% for z in zona_options %}
+                        <option value="{{ z.id }}" {{ 'selected' if zid == z.id|string }}>{{ z.label }}</option>
+                        {% endfor %}
+                        </select>
+                        <div class="hint">No necesitas saber el ID: aquí salen nombre y barrio.</div>
+                    </div>
+
+                    <div class="field-wrap">
+                        <label for="zona">Búsqueda por texto (opcional)</label>
+                        <input id="zona" class="field" type="text" name="zona" placeholder="Ejemplo: Midtown, Queens, Airport" value="{{ filtros.zona if filtros else '' }}">
+                        <div class="hint">Úsalo si prefieres escribir en vez de elegir del desplegable.</div>
+                    </div>
+
+                    <div class="field-wrap">
+                        <label for="franja">Franja horaria</label>
+                        <select id="franja" class="field" name="franja">
+                        {% set fr = filtros.franja if filtros else '' %}
+                        <option value="">Franja (todas)</option>
+                        <option value="madrugada" {{ 'selected' if fr == 'madrugada' }}>Madrugada</option>
+                        <option value="manana" {{ 'selected' if fr == 'manana' }}>Mañana</option>
+                        <option value="mediodia" {{ 'selected' if fr == 'mediodia' }}>Mediodía</option>
+                        <option value="tarde" {{ 'selected' if fr == 'tarde' }}>Tarde</option>
+                        <option value="noche" {{ 'selected' if fr == 'noche' }}>Noche</option>
+                        </select>
+                        <div class="hint">Filtra por tramo del día.</div>
+                    </div>
+
+                    <div class="field-wrap">
+                        <label for="nivel">Nivel de demanda</label>
+                        <select id="nivel" class="field" name="nivel">
+                        {% set nl = filtros.nivel if filtros else '' %}
+                        <option value="">Todos</option>
+                        <option value="baja" {{ 'selected' if nl == 'baja' }}>Baja</option>
+                        <option value="media" {{ 'selected' if nl == 'media' }}>Media</option>
+                        <option value="alta" {{ 'selected' if nl == 'alta' }}>Alta</option>
+                        </select>
+                        <div class="hint">Alta = zonas/franjas con más demanda relativa.</div>
+                    </div>
+                </div>
+
+                <div class="grid" style="margin-top: 10px;">
+                    <div class="field-wrap">
+                        <label for="demanda_min">Demanda mínima (opcional)</label>
+                        <input id="demanda_min" class="field" type="number" step="0.01" name="demanda_min" placeholder="Ejemplo: 20" value="{{ filtros.demanda_min if filtros else '' }}">
+                    </div>
+                    <div class="field-wrap">
+                        <label for="demanda_max">Demanda máxima (opcional)</label>
+                        <input id="demanda_max" class="field" type="number" step="0.01" name="demanda_max" placeholder="Ejemplo: 50" value="{{ filtros.demanda_max if filtros else '' }}">
+                    </div>
+                    <div class="field-wrap">
+                        <label for="top">Máximo de resultados</label>
+                        <input id="top" class="field" type="number" min="1" max="100" name="top" value="{{ filtros.top if filtros and filtros.top else 20 }}">
+                    </div>
+                </div>
+                <button class="btn" type="submit">Consultar demanda</button>
+            </form>
+
+            <div class="help-box">
+                <strong>Cómo usarlo:</strong><br>
+                1) Elige una zona en el desplegable (o escribe texto en búsqueda libre).<br>
+                2) Opcional: añade franja y/o nivel.<br>
+                3) Pulsa “Consultar demanda”.<br><br>
+                <strong>Ejemplos:</strong><br>
+                - Zona: Midtown Center + Franja: Tarde<br>
+                - Franja: Noche + Nivel: Alta
+            </div>
+
+            {% if error %}
+            <p class="error">{{ error }}</p>
+            {% endif %}
+
+            {% if resultados and resultados|length > 0 %}
+            <p style="margin-top: 12px; color: #666;">Resultados: {{ resultados|length }}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Zona ID</th>
+                        <th>Zona</th>
+                        <th>Barrio</th>
+                        <th>Franja</th>
+                        <th>Nivel</th>
+                        <th>Demanda Media</th>
+                        <th>Score</th>
+                        <th>Hora Pico</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in resultados %}
+                    <tr>
+                        <td>{{ r.origen_id }}</td>
+                        <td>{{ r.origen_zona if r.origen_zona else '-' }}</td>
+                        <td>{{ r.origen_barrio if r.origen_barrio else '-' }}</td>
+                        <td>{{ r.franja_horaria }}</td>
+                        <td>{{ r.nivel_demanda }}</td>
+                        <td>{{ '%.2f'|format(r.demanda_media) }}</td>
+                        <td>{{ r.score_demanda_0_100 }}</td>
+                        <td>{{ r.hora_pico if r.hora_pico is not none else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

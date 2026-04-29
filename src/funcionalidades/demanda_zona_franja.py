@@ -112,11 +112,17 @@ def cargar_datos_demanda(paths: list[Path] | None = None) -> pd.DataFrame:
             frames.append(df[["origen_id", "hora", "demanda"]])
         elif {"origen_id", "fecha_inicio"}.issubset(columnas):
             frames.append(agregar_viajes_por_zona_hora(path))
+        elif {"origen_id", "hora", "n_viajes"}.issubset(columnas):
+            # Compatibilidad con contexto_web: n_viajes resume demanda historica.
+            df = cargar_parquet_columnas(path, ["origen_id", "hora", "n_viajes"])
+            df = df.rename(columns={"n_viajes": "demanda"})
+            frames.append(df[["origen_id", "hora", "demanda"]])
         else:
             raise ValueError(
                 f"{path} necesita columnas ('origen_id', 'hora', 'demanda'), "
                 "('origen_id', 'timestamp_hora', 'demanda') "
-                "o ('origen_id', 'fecha_inicio')."
+                "o ('origen_id', 'fecha_inicio') "
+                "o ('origen_id', 'hora', 'n_viajes')."
             )
 
     out = pd.concat(frames, ignore_index=True)
