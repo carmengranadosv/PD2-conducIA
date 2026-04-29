@@ -21,6 +21,7 @@ from src.funcionalidades.demanda_zona_franja import (
     cargar_resumen_para_consulta,
     consultar_demanda,
 )
+from src.funcionalidades.max_demanda import predecir_top_3_zonas
 
 # --- 2. DEFINICIÓN DE RUTAS Y DIRECTORIOS ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -53,6 +54,14 @@ async def lifespan(app: FastAPI):
         app.encoder_p4 = joblib.load(MODEL_DIR / "modelo_p4_label_encoder_zonas.joblib")
         app.modelo_p5 = joblib.load(MODEL_DIR / "modelo_p5_xgboost.joblib")
         print("✅ Modelos cargados correctamente.")
+
+        path_zonas = DATA_ROOT / "external/taxi_zone_lookup.csv"
+        if path_zonas.exists():
+            app.df_zonas = pd.read_csv(path_zonas)
+        else:
+            # Fallback por si la ruta es distinta en tu local
+            app.df_zonas = pd.DataFrame(columns=['LocationID', 'Zone', 'Borough'])
+
     except Exception as e:
         print(f"❌ Error cargando modelos: {e}")
     yield
@@ -390,6 +399,61 @@ def predecir_potencial_zona(zona_id: int, t):
         "contexto": info,
     }
 
+def predecir_demanda_zona_p1(zona_id: int, t):
+    info = obtener_contexto_zona(zona_id, t)
+
+    oferta = valor_contexto(info, "oferta_inferida", 1.0, float)
+    tasa_historica = valor_contexto(info, "tasa_historica", 1.0, float)
+
+    temp = valor_contexto(info, "temp_c", 15.0, float)
+    precipitation = valor_contexto(info, "precipitation", 0.0, float)
+    viento_kmh = valor_contexto(info, "viento_kmh", 10.0, float)
+    lluvia = valor_contexto(info, "lluvia", 0.0, float)
+    nieve = valor_contexto(info, "nieve", 0.0, float)
+    es_festivo = valor_contexto(info, "es_festivo", 0.0, float)
+    num_eventos = valor_contexto(info, "num_eventos", 0, float)
+
+    oferta_media = (
+        float(df_p2_contexto["oferta_inferida"].mean())
+        if not df_p2_contexto.empty and "oferta_inferida" in df_p2_contexto.columns
+        else oferta
+    )
+
+    df_p1 = pd.DataFrame([{
+        "origen_id": int(zona_id),
+        "hora": int(t["hora_int"]),
+        "dia_semana": int(t["dia_semana"]),
+        "dia_mes": int(t["dia_mes"]),
+        "mes_num": int(t["mes_num"]),
+        "es_finde": int(t["es_fin_semana"]),
+
+        "demanda": oferta,
+        "lag_1h": oferta,
+        "lag_2h": oferta,
+        "lag_3h": oferta,
+        "lag_6h": oferta,
+        "lag_12h": oferta,
+        "lag_24h": tasa_historica * oferta_media,
+
+        "roll_mean_3h": oferta,
+        "roll_std_3h": oferta * 0.1,
+        "roll_mean_24h": oferta,
+        "roll_std_24h": oferta * 0.1,
+        "media_hist": tasa_historica * oferta_media,
+
+        "temp_c": temp,
+        "precipitation": precipitation,
+        "viento_kmh": viento_kmh,
+        "velocidad_mph": viento_kmh * 0.621,
+
+        "lluvia": lluvia,
+        "nieve": nieve,
+        "es_festivo": es_festivo,
+        "num_eventos": num_eventos,
+    }])
+
+    return max(float(app.modelo_p1.predict(df_p1)[0]), 0.0)
+
 # --- 7. RUTAS GET (NAVEGACIÓN) ---
 @app.get("/", response_class=HTMLResponse)
 async def pantalla_inicio(request: Request):
@@ -543,6 +607,67 @@ async def consultar_funcionalidades(
         },
     )
 
+
+@app.post("/funcionalidades/max-demanda", response_class=HTMLResponse)
+async def post_max_demanda(
+    request: Request, 
+    dia: str = Form(...), 
+    hora: int = Form(...)
+):
+    try:
+        dias_map = {
+            "Monday": 0, "Tuesday": 1, "Wednesday": 2,
+            "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6
+        }
+
+        t = procesar_tiempo_despliegue(str(hora))
+        t["dia_semana"] = dias_map[dia]
+        t["es_fin_semana"] = 1 if t["dia_semana"] >= 5 else 0
+        t["es_finde"] = t["es_fin_semana"]
+
+        resultados = []
+
+        for zona_id in app.df_zonas["LocationID"].dropna().unique():
+            try:
+                demanda = predecir_demanda_zona_p1(int(zona_id), t)
+
+                info_zona = app.df_zonas[app.df_zonas["LocationID"] == zona_id].iloc[0]
+
+                resultados.append({
+                    "nombre": info_zona["Zone"],
+                    "barrio": info_zona["Borough"],
+                    "demanda": demanda,
+                })
+
+            except Exception:
+                continue
+
+        top_3 = sorted(resultados, key=lambda x: x["demanda"], reverse=True)[:3]
+        error_max = None
+
+    except Exception as e:
+        top_3 = []
+        error_max = f"Error en predicción: {str(e)}"
+
+    resumen = obtener_resumen_demanda_contexto()
+    opciones = obtener_opciones_zona(resumen)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="funcionalidades.html",
+        context={
+            "request": request,
+            "mapa_disponible": MAPA_HTML_PATH.exists(),
+            "zona_options": opciones,
+            "top_zonas": top_3,
+            "dia_sel": dia,
+            "hora_sel": hora,
+            "error_max": error_max,
+            "resultados": [],
+            "filtros": {"top": 20},
+            "error": None,
+        },
+    )
 
 @app.get("/funcionalidades/mapa", response_class=HTMLResponse)
 async def ver_mapa_funcionalidades():

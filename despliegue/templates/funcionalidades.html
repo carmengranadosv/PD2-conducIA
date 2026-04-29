@@ -48,6 +48,54 @@
             {% endif %}
         </section>
 
+        <section class="panel" style="border-top: 4px solid #e63946;">
+            <h2>Zonas de Máxima Demanda</h2>
+            <p style="color:#555; margin-top: 0;">Identifica los 3 puntos calientes de Nueva York en tiempo real usando el modelo Random Forest.</p>
+            
+            <form method="post" action="/funcionalidades/max-demanda">
+                <div class="grid">
+                    <div class="field-wrap">
+                        <label for="dia_max">Día de la semana</label>
+                        <select id="dia_max" class="field" name="dia">
+                            <option value="Monday" {{ 'selected' if dia_sel == 'Monday' }}>Lunes</option>
+                            <option value="Tuesday" {{ 'selected' if dia_sel == 'Tuesday' }}>Martes</option>
+                            <option value="Wednesday" {{ 'selected' if dia_sel == 'Wednesday' }}>Miércoles</option>
+                            <option value="Thursday" {{ 'selected' if dia_sel == 'Thursday' }}>Jueves</option>
+                            <option value="Friday" {{ 'selected' if dia_sel == 'Friday' }}>Viernes</option>
+                            <option value="Saturday" {{ 'selected' if dia_sel == 'Saturday' }}>Sábado</option>
+                            <option value="Sunday" {{ 'selected' if dia_sel == 'Sunday' }}>Domingo</option>
+                        </select>
+                    </div>
+                    <div class="field-wrap">
+                        <label for="hora_max">Hora del día (0-23)</label>
+                        <input id="hora_max" class="field" type="number" name="hora" min="0" max="23" value="{{ hora_sel if hora_sel else 12 }}">
+                    </div>
+                    <div class="field-wrap" style="display: flex; align-items: flex-end;">
+                        <button class="btn" style="width: 100%; margin-top: 0; background: #e63946;" type="submit">Predecir Top 3</button>
+                    </div>
+                </div>
+            </form>
+
+            {% if error_max %}
+                <p class="error">{{ error_max }}</p>
+            {% endif %}
+
+            {% if top_zonas %}
+            <div class="grid" style="margin-top: 25px; gap: 20px;">
+                {% for zona in top_zonas %}
+                <div class="help-box" style="border-left: 4px solid #222; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; padding: 20px;">
+                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #888;">Ranking {{ loop.index }}</div>
+                    <strong style="font-size: 1.1rem; display: block; margin: 5px 0;">{{ zona.nombre }}</strong>
+                    <small style="color: #666;">{{ zona.barrio }}</small>
+                    <div style="color: #e63946; font-weight: 800; font-size: 1.2rem; margin-top: 10px;">
+                        {{ '%.1f'|format(zona.demanda) }} <span style="font-size: 0.7rem;">viajes previstos</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+
         <section class="panel">
             <h2>Demanda por Zona y Franja</h2>
             <p style="color:#555; margin-top: 0;">Consulta rápida para ver dónde suele haber más viajes según zona y momento del día.</p>
