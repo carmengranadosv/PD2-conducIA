@@ -99,9 +99,9 @@
 
             {% if resultado %}
             <div id="resVTC" style="margin-top:30px; padding:25px; background:#fdfdfd; border-radius:10px; border: 1px solid #eee; text-align: center;">
-                <p><strong>Propina Estimada (P5):</strong> ${{ resultado.propina }}</p>
-                <p><strong>Velocidad Predicha (P4):</strong> {{ resultado.velocidad }} mph</p>
-                <p><strong>Potencial de Retorno en Destino (P2):</strong> {{ resultado.retorno_prob }}%</p>
+                <p><strong>Propina Estimada (XGB):</strong> ${{ resultado.propina }}</p>
+                <p><strong>Velocidad Predicha (NN):</strong> {{ resultado.velocidad }} mph</p>
+                <p><strong>Potencial de Retorno en Destino (RF):</strong> {{ resultado.retorno_prob }}%</p>
                 <p><strong>Rentabilidad Estimada:</strong> {{ resultado.encadenado }} · Score {{ resultado.rentabilidad_score }}%</p>
                 <p style="color: #666; font-size: 0.85rem; margin-top: 10px;">{{ resultado.detalles }}</p>
                 
