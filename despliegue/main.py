@@ -21,7 +21,6 @@ from src.funcionalidades.demanda_zona_franja import (
     cargar_resumen_para_consulta,
     consultar_demanda,
 )
-from src.funcionalidades.max_demanda import predecir_top_3_zonas
 
 # --- 2. DEFINICIÓN DE RUTAS Y DIRECTORIOS ---
 BASE_DIR = Path(__file__).resolve().parent
